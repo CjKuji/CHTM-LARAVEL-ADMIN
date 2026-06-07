@@ -20,7 +20,7 @@ class ArchivedController extends Controller
         $selected = $selectedId ? $archived->firstWhere('id', $selectedId) : $archived->first();
 
         return view('archived.index', [
-            'activeMenu'       => 'frontoffice', // Aligned with the layout menu context setup in web.php
+            'activeMenu'       => 'archived', // Aligned with the layout menu context setup in web.php
             'archivedBookings' => $archived,
             'selectedBooking'  => $selected,
         ]);

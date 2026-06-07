@@ -17,7 +17,8 @@ class AdminUserSeeder extends Seeder
                 'fname' => 'System',
                 'lname' => 'Administrator',
                 'email' => 'admin@chtm.local',
-                'password' => Hash::make('password'),
+                // Supabase schema does not include a password column.
+                // Password auth is handled via Supabase Auth; this Seeder only syncs profile fields.
                 'role' => UserRole::SuperAdmin->value,
             ]
         );

@@ -49,7 +49,23 @@
         </div>
         <nav class="flex-1 space-y-1 p-3 overflow-y-auto">
             @foreach ($visibleItems as $item)
-                @php $active = ($activeMenu ?? '') === $item['id']; @endphp
+                @php
+                    // Active state: prefer controller-provided $activeMenu, but fall back to current route name.
+                    $routeName = request()->route()?->getName();
+                    $activeByRoute = match ($item['id']) {
+                        'dashboard' => $routeName === 'dashboard',
+                        'frontoffice' => $routeName === 'frontoffice' || $routeName === 'frontoffice.update' || $routeName === 'frontoffice.receipts.store' || $routeName === 'frontoffice.receipt',
+                        'reservation' => $routeName === 'reservation' || str_starts_with((string) $routeName, 'reservation.'),
+                        'archived' => $routeName === 'archived',
+                        'room' => $routeName === 'room' || str_starts_with((string) $routeName, 'room.'),
+                        'audit' => $routeName === 'audit',
+                        'settings' => $routeName === 'settings' || $routeName === 'settings.update',
+                        default => false,
+                    };
+
+                    $active = ($activeMenu ?? '') === $item['id'] || $activeByRoute;
+                @endphp
+
                 <a href="{{ $hrefMap[$item['id']] }}"
                    @click="mobileOpen = false"
                    class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 {{ $active ? 'bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-md' : 'text-teal-100 hover:bg-teal-800/60 hover:text-white' }}">
@@ -76,8 +92,24 @@
     </div>
 
     <nav class="flex-1 space-y-1 p-3 overflow-y-auto">
-        @foreach ($visibleItems as $item)
-            @php $active = ($activeMenu ?? '') === $item['id']; @endphp
+            @foreach ($visibleItems as $item)
+                @php
+                    // Active state: prefer controller-provided $activeMenu, but fall back to current route name.
+                    $routeName = request()->route()?->getName();
+                    $activeByRoute = match ($item['id']) {
+                        'dashboard' => $routeName === 'dashboard',
+                        'frontoffice' => $routeName === 'frontoffice' || $routeName === 'frontoffice.update' || $routeName === 'frontoffice.receipts.store' || $routeName === 'frontoffice.receipt',
+                        'reservation' => $routeName === 'reservation' || str_starts_with((string) $routeName, 'reservation.'),
+                        'archived' => $routeName === 'archived',
+                        'room' => $routeName === 'room' || str_starts_with((string) $routeName, 'room.'),
+                        'audit' => $routeName === 'audit',
+                        'settings' => $routeName === 'settings' || $routeName === 'settings.update',
+                        default => false,
+                    };
+
+                    $active = ($activeMenu ?? '') === $item['id'] || $activeByRoute;
+                @endphp
+
             <a href="{{ $hrefMap[$item['id']] }}"
                class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 {{ $active ? 'bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-md' : 'text-teal-100 hover:bg-teal-800/60 hover:text-white' }}"
                :class="sidebarCollapsed ? 'justify-center' : ''"

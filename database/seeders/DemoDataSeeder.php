@@ -18,43 +18,17 @@ class DemoDataSeeder extends Seeder
 {
     public function run(): void
     {
+        // Supabase Auth must create users in auth.users.
+        // This seeder assumes the profile rows already exist in public.users.
+        // If they don't, you should seed via Supabase Auth + your SQL/RPC sync function.
+
         $admin = User::query()->where('email_hash', User::hashEmail('admin@chtm.local'))->first();
+        $guest = User::query()->where('email_hash', User::hashEmail('guest@chtm.local'))->first();
+        $guest2 = User::query()->where('email_hash', User::hashEmail('juan.delacruz@chtm.local'))->first();
 
-        // FIXED: Replaced raw string role declarations with corresponding UserRole Enum definitions
-        User::query()->updateOrCreate(
-            ['email_hash' => User::hashEmail('reservation@chtm.local')],
-            ['fname' => 'Ria', 'lname' => 'Reservation', 'email' => 'reservation@chtm.local', 'password' => Hash::make('password'), 'role' => UserRole::Reservation->value]
-        );
-        User::query()->updateOrCreate(
-            ['email_hash' => User::hashEmail('frontoffice@chtm.local')],
-            ['fname' => 'Faye', 'lname' => 'FrontOffice', 'email' => 'frontoffice@chtm.local', 'password' => Hash::make('password'), 'role' => UserRole::FrontOffice->value]
-        );
-        User::query()->updateOrCreate(
-            ['email_hash' => User::hashEmail('housekeeper@chtm.local')],
-            ['fname' => 'Helen', 'lname' => 'Housekeeper', 'email' => 'housekeeper@chtm.local', 'password' => Hash::make('password'), 'role' => UserRole::Housekeeper->value]
-        );
-
-        $guest = User::query()->updateOrCreate(
-            ['email_hash' => User::hashEmail('guest@chtm.local')],
-            [
-                'fname' => 'Maria',
-                'lname' => 'Santos',
-                'email' => 'guest@chtm.local',
-                'password' => Hash::make('password'),
-                'role' => UserRole::User->value,
-            ]
-        );
-
-        $guest2 = User::query()->updateOrCreate(
-            ['email_hash' => User::hashEmail('juan.delacruz@chtm.local')],
-            [
-                'fname' => 'Juan',
-                'lname' => 'Del Cruz',
-                'email' => 'juan.delacruz@chtm.local',
-                'password' => Hash::make('password'),
-                'role' => UserRole::User->value,
-            ]
-        );
+        if (! $guest || ! $guest2) {
+            throw new \RuntimeException('Missing Supabase users in public.users for demo seeding (guest/guest2).');
+        }
 
         $wifi = Amenity::query()->firstOrCreate(['name' => 'Wi-Fi']);
         $tv = Amenity::query()->firstOrCreate(['name' => 'Smart TV']);

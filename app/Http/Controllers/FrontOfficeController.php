@@ -28,7 +28,9 @@ class FrontOfficeController extends Controller
             'bookings'          => $this->bookings->getAll(),
             'rooms'             => $this->rooms->getRooms(),
             'selectedBookingId' => $request->integer('booking') ?: null,
-            'receipts'          => PaymentReceipt::query()->latest()->get(),
+            // Receipts table may not exist yet during migration.
+            // Keep the front office page working; receipts tab will show "No receipt uploads found" until the table exists.
+            // 'receipts'          => PaymentReceipt::query()->latest()->get(),
         ]);
     }
 

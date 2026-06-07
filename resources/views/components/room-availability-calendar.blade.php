@@ -14,12 +14,18 @@
 
 @once
     @push('head')
+        <script>
+            // Debug: confirm payload shapes
+            window.__roomAvailabilityCalendarPayload = window.__roomAvailabilityCalendarPayload || null;
+        </script>
         <script src="{{ asset('js/room-calendar.js') }}" defer></script>
     @endpush
-@once
+@endonce
 
 <div
     class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition"
+data-reservation-url="{{ route('reservation') }}"
+    data-tab="{{ $tab ?? request('tab','pending') }}"
     x-data="roomAvailabilityCalendar({
         availability: @js($availability),
         rooms: @js($calendarRooms),
@@ -87,6 +93,7 @@
                         :class="isBooked(day)
                             ? 'border-red-200 bg-red-50 text-red-700 font-semibold'
                             : 'border-emerald-100 bg-emerald-50/60 text-emerald-800 font-medium'"
+                        @click="onDayClick(day)"
                     >
                         <span class="text-xs tracking-tight" x-text="day"></span>
                         <span class="text-[9px] uppercase tracking-widest font-bold block opacity-75" x-text="isBooked(day) ? 'Full' : 'Open'"></span>
@@ -107,3 +114,4 @@
         </div>
     </template>
 </div>
+

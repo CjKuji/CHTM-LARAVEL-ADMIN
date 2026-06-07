@@ -23,7 +23,7 @@ class ReservationController extends Controller
             $tab = 'pending';
         }
 
-        $bookings = $this->bookings->getByStatus($tab);
+        $bookings = $this->bookings->getByStatus($tab, 25);
         $selected = $request->integer('booking')
             ? $this->bookings->getById($request->integer('booking'))
             : null;
