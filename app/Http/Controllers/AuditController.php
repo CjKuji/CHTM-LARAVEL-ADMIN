@@ -15,7 +15,7 @@ class AuditController extends Controller
         $period = $request->string('period', 'monthly')->toString();
         $year = (int) $request->input('year', now()->year);
         
-        // FIXED: Resolved the critical January (Month 0) boundary crash vector
+        // Resolved the critical January (Month 0) boundary crash vectors safely
         $currentMonth = now()->month;
         $defaultMonth = $currentMonth === 1 ? 12 : $currentMonth - 1;
         $defaultYear  = $currentMonth === 1 && ! $request->has('year') ? now()->year - 1 : $year;

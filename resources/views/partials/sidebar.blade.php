@@ -28,18 +28,10 @@
     });
 @endphp
 
-{{-- Mobile Sidebar Menu Action Button Trigger --}}
-<button type="button"
-        @click="mobileOpen = true"
-        class="fixed top-3 left-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl bg-teal-900 text-white shadow-lg md:hidden border border-teal-800 hover:bg-teal-800 transition active:scale-95"
-        aria-label="Open navigation menu">
-    ☰
-</button>
-
-{{-- Mobile View Navigation Slideout Drawer Overlay --}}
-<div x-show="mobileOpen" x-cloak class="md:hidden">
-    <div class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" @click="mobileOpen = false"></div>
-    <aside class="fixed bottom-0 left-0 top-0 z-50 w-72 bg-gradient-to-b from-teal-950 to-teal-900 text-white shadow-2xl flex flex-col">
+{{-- A. MOBILE DRAWER OVERLAY --}}
+<div x-show="mobileOpen" x-cloak class="md:hidden relative z-50">
+    <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" @click="mobileOpen = false"></div>
+    <aside class="fixed bottom-0 left-0 top-0 w-72 bg-gradient-to-b from-teal-950 to-teal-900 text-white shadow-2xl flex flex-col">
         <div class="flex items-center justify-between border-b border-white/10 p-4 flex-shrink-0">
             <div>
                 <h1 class="text-lg font-bold tracking-tight text-white">CHTM RRS</h1>
@@ -50,7 +42,6 @@
         <nav class="flex-1 space-y-1 p-3 overflow-y-auto">
             @foreach ($visibleItems as $item)
                 @php
-                    // Active state: prefer controller-provided $activeMenu, but fall back to current route name.
                     $routeName = request()->route()?->getName();
                     $activeByRoute = match ($item['id']) {
                         'dashboard' => $routeName === 'dashboard',
@@ -62,7 +53,6 @@
                         'settings' => $routeName === 'settings' || $routeName === 'settings.update',
                         default => false,
                     };
-
                     $active = ($activeMenu ?? '') === $item['id'] || $activeByRoute;
                 @endphp
 
@@ -77,10 +67,11 @@
     </aside>
 </div>
 
-{{-- Persistent Desktop Panel Sidebar Navigation --}}
-<aside class="fixed left-0 top-0 z-30 hidden h-screen bg-gradient-to-b from-teal-950 to-teal-900 text-white shadow-xl transition-all duration-300 md:flex flex-col"
+{{-- B. PERSISTENT DESKTOP SIDEBAR --}}
+<aside class="desktop-sidebar hidden h-screen bg-gradient-to-b from-teal-950 to-teal-900 text-white shadow-xl md:flex flex-col flex-shrink-0"
        :class="sidebarCollapsed ? 'w-20' : 'w-64'">
-    <div class="flex items-center justify-between border-b border-white/10 p-4 flex-shrink-0">
+    
+    <div class="flex items-center justify-between border-b border-white/10 p-4 h-16 flex-shrink-0">
         <div x-show="!sidebarCollapsed" x-cloak class="min-w-0">
             <h1 class="text-lg font-bold tracking-tight truncate">CHTM RRS</h1>
             <p class="text-xs text-teal-300/80 font-medium truncate">Hotel Management</p>
@@ -92,23 +83,21 @@
     </div>
 
     <nav class="flex-1 space-y-1 p-3 overflow-y-auto">
-            @foreach ($visibleItems as $item)
-                @php
-                    // Active state: prefer controller-provided $activeMenu, but fall back to current route name.
-                    $routeName = request()->route()?->getName();
-                    $activeByRoute = match ($item['id']) {
-                        'dashboard' => $routeName === 'dashboard',
-                        'frontoffice' => $routeName === 'frontoffice' || $routeName === 'frontoffice.update' || $routeName === 'frontoffice.receipts.store' || $routeName === 'frontoffice.receipt',
-                        'reservation' => $routeName === 'reservation' || str_starts_with((string) $routeName, 'reservation.'),
-                        'archived' => $routeName === 'archived',
-                        'room' => $routeName === 'room' || str_starts_with((string) $routeName, 'room.'),
-                        'audit' => $routeName === 'audit',
-                        'settings' => $routeName === 'settings' || $routeName === 'settings.update',
-                        default => false,
-                    };
-
-                    $active = ($activeMenu ?? '') === $item['id'] || $activeByRoute;
-                @endphp
+        @foreach ($visibleItems as $item)
+            @php
+                $routeName = request()->route()?->getName();
+                $activeByRoute = match ($item['id']) {
+                    'dashboard' => $routeName === 'dashboard',
+                    'frontoffice' => $routeName === 'frontoffice' || $routeName === 'frontoffice.update' || $routeName === 'frontoffice.receipts.store' || $routeName === 'frontoffice.receipt',
+                    'reservation' => $routeName === 'reservation' || str_starts_with((string) $routeName, 'reservation.'),
+                    'archived' => $routeName === 'archived',
+                    'room' => $routeName === 'room' || str_starts_with((string) $routeName, 'room.'),
+                    'audit' => $routeName === 'audit',
+                    'settings' => $routeName === 'settings' || $routeName === 'settings.update',
+                    default => false,
+                };
+                $active = ($activeMenu ?? '') === $item['id'] || $activeByRoute;
+            @endphp
 
             <a href="{{ $hrefMap[$item['id']] }}"
                class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 {{ $active ? 'bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-md' : 'text-teal-100 hover:bg-teal-800/60 hover:text-white' }}"

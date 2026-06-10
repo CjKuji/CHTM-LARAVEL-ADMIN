@@ -49,7 +49,7 @@ class SettingsController extends Controller
             $request->session()->put('settings.login_alert', $request->boolean('loginAlertEnabled'));
         }
 
-        // FIXED: Explicitly retain the active tab context parameter within the redirect route
+        // Explicitly retain the active tab context parameter within the redirect route
         return redirect()
             ->to(route('settings.index', ['tab' => $tab]))
             ->with('status', 'Settings saved successfully.');

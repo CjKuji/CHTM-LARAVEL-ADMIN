@@ -1,0 +1,78 @@
+<?php
+
+namespace App\Livewire;
+
+use Livewire\Component;
+use App\Models\ArchivedBooking;
+use App\Models\User;
+use Livewire\Attributes\On;
+use Illuminate\Contracts\View\View;
+
+class ArchivedReservationDetailsModal extends Component
+{
+    public ?int $bookingId = null;
+    public ?ArchivedBooking $booking = null;
+
+    // Staff attribute name containers
+    public ?string $approvedByName = null;
+    public ?string $rejectedByName = null;
+    public ?string $checkedInByName = null;
+    public ?string $checkedOutByName = null;
+
+    /**
+     * Hydrates the archived booking record and maps operational staff identifier values to real names.
+     */
+    #[On('view-archive-details')]
+    public function loadArchiveBooking(int $id): void
+    {
+        $this->bookingId = $id;
+        $this->booking = ArchivedBooking::with('user')->find($id);
+
+        if ($this->booking) {
+            $this->approvedByName = $this->getStaffName($this->booking->approved_by);
+            $this->rejectedByName = $this->getStaffName($this->booking->rejected_by);
+            $this->checkedInByName = $this->getStaffName($this->booking->checked_in_by);
+            $this->checkedOutByName = $this->getStaffName($this->booking->checked_out_by);
+        }
+    }
+
+    /**
+     * Helper to resolve a staff reference signature (ID or UUID) to a viewable user name string.
+     * * Changed type-hint from ?int to string|int|null to safely support UUID architectures.
+     */
+    private function getStaffName(string|int|null $staffId): ?string
+    {
+        if (!$staffId) {
+            return null;
+        }
+
+        $user = User::find($staffId);
+        
+        if ($user) {
+            // Checks if your User model uses a custom fullName method, otherwise falls back to standard name column layout
+            return method_exists($user, 'fullName') ? $user->fullName() : ($user->name ?? "Staff Reference #{$staffId}");
+        }
+
+        return "Staff Reference #{$staffId}";
+    }
+
+    /**
+     * Clears out all backend data tracks when the window drops out of focus.
+     */
+    public function resetModalState(): void
+    {
+        $this->reset([
+            'bookingId', 
+            'booking', 
+            'approvedByName', 
+            'rejectedByName', 
+            'checkedInByName', 
+            'checkedOutByName'
+        ]);
+    }
+
+    public function render(): View
+    {
+        return view('modals.archived-reservation-modal');
+    }
+}

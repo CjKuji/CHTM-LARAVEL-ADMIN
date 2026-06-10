@@ -23,14 +23,16 @@ class ProfileController extends Controller
         $user = $request->user();
         $email = $request->string('email')->toString();
 
-        if (User::query()->where('email_hash', User::hashEmail($email))->where('id', '!=', $user->id)->exists()) {
+        // Check if email hash exists elsewhere using pre-computed SHA-256 strings
+        $emailHash = hash('sha256', $email);
+        if (User::query()->where('email_hash', $emailHash)->where('id', '!=', $user->id)->exists()) {
             return back()->withErrors(['email' => 'Email already in use.'])->withInput();
         }
 
         $user->fill($request->validated());
         
-        // FIXED: Enforce deterministic blind indexing updates whenever account emails change
-        $user->email_hash = User::hashEmail($email);
+        // Enforce deterministic blind indexing updates whenever account emails change
+        $user->email_hash = $emailHash;
         $user->save();
 
         return redirect()->route('profile')->with('status', 'Profile updated.');

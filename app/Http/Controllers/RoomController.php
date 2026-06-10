@@ -13,17 +13,38 @@ class RoomController extends Controller
 {
     public function __construct(private readonly RoomService $rooms) {}
 
+    /**
+     * Display the room listings with optimized data routing.
+     */
     public function index(Request $request): View
     {
         $tab = $request->string('tab', 'inventory')->toString();
+        if (!in_array($tab, ['inventory', 'housekeeping'], true)) {
+            $tab = 'inventory';
+        }
+
+        // Initialize lazy arrays to prevent sequential network traffic to Supabase
+        $roomsData = [];
+        $roomTypesData = [];
+        $tasksData = [];
+        $templatesData = [];
+
+        if ($tab === 'inventory') {
+            $roomsData = $this->rooms->getRooms();
+            $roomTypesData = $this->rooms->getRoomTypes();
+        } elseif ($tab === 'housekeeping') {
+            $roomsData = $this->rooms->getRooms(); // Often needed for status overview counters
+            $tasksData = $this->rooms->getTasks();
+            $templatesData = $this->rooms->getTemplates();
+        }
 
         return view('room.index', [
             'activeMenu' => 'room',
-            'tab'        => in_array($tab, ['inventory', 'housekeeping'], true) ? $tab : 'inventory',
-            'rooms'      => $this->rooms->getRooms(),
-            'roomTypes'  => $this->rooms->getRoomTypes(),
-            'tasks'      => $this->rooms->getTasks(),
-            'templates'  => $this->rooms->getTemplates(),
+            'tab'        => $tab,
+            'rooms'      => $roomsData,
+            'roomTypes'  => $roomTypesData,
+            'tasks'      => $tasksData,
+            'templates'  => $templatesData,
             'editRoomId' => $request->integer('edit') ?: null,
         ]);
     }
@@ -38,7 +59,6 @@ class RoomController extends Controller
         ]);
 
         $this->rooms->createRoom($data);
-
         return back()->with('status', 'Room created.');
     }
 
@@ -52,14 +72,12 @@ class RoomController extends Controller
         ]);
 
         $this->rooms->updateRoom($room, $data);
-
         return back()->with('status', 'Room updated.');
     }
 
     public function destroy(Room $room): RedirectResponse
     {
         $this->rooms->deleteRoom($room);
-
         return back()->with('status', 'Room deleted.');
     }
 
@@ -72,7 +90,7 @@ class RoomController extends Controller
             'make_up_room'       => $room->make_up_room
                 ? $this->rooms->clearMakeUpRoom($room)
                 : $this->rooms->requestMakeUpRoom($room, (int) $room->room_type_id),
-            'checkout_requested' => $this->rooms->updateRoomFlags($room, ['checkout_requested' => ! $room->checkout_requested]),
+            'checkout_requested' => $this->rooms->updateRoomFlags($room, ['checkout_requested' => !$room->checkout_requested]),
             default              => null,
         };
 
@@ -82,14 +100,12 @@ class RoomController extends Controller
     public function startCleaning(HousekeepingTask $task): RedirectResponse
     {
         $this->rooms->startCleaning($task);
-
         return back()->with('status', 'Cleaning started.');
     }
 
     public function completeCleaning(HousekeepingTask $task): RedirectResponse
     {
         $this->rooms->completeCleaning($task);
-
         return back()->with('status', 'Cleaning completed.');
     }
 
@@ -102,7 +118,7 @@ class RoomController extends Controller
             'items.*'      => ['nullable', 'string'],
         ]);
 
-        // FIXED: Filter out empty array items before hitting the service layer
+        // Filter out empty array items before hitting the service layer
         $cleanItems = collect($data['items'])
             ->map(fn ($item) => trim((string) $item))
             ->filter(fn ($item) => $item !== '')

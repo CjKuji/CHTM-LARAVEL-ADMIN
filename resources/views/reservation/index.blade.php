@@ -1,30 +1,71 @@
-@extends('layouts.app')
+<div x-data="{ showCalendarModal: false }" class="space-y-6">
+    {{-- Global Notification Toast Track managed by Alpine --}}
+    <div id="global-alert-container" class="fixed top-4 right-4 z-[100] space-y-2 pointer-events-none"
+         x-data="{ 
+            messages: [],
+            addAlert(message, type) {
+                const id = Date.now();
+                this.messages.push({ id, message, type });
+                setTimeout(() => { this.messages = this.messages.filter(m => m.id !== id) }, 4000);
+            }
+         }"
+         @notify.window="addAlert($event.detail.message, 'success')">
+        
+        <template x-for="alert in messages" :key="alert.id">
+            <div class="flex items-center justify-between rounded-xl border px-4 py-3 text-sm shadow-md transition-all duration-300 bg-green-50 border-green-200 text-green-800 pointer-events-auto">
+                <div class="flex items-center gap-2">
+                    <svg class="h-4 w-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span class="font-medium" x-text="alert.message"></span>
+                </div>
+            </div>
+        </template>
+    </div>
 
-@section('title', 'Reservations')
-@section('topbar_title', 'Reservations')
-
-@section('content')
-<div class="space-y-6">
-    <div class="flex items-center justify-between">
+    {{-- Header Content Canvas Topbar Summary Titles --}}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="text-xl font-bold text-gray-900 tracking-tight">Reservations Desk</h1>
             <p class="text-xs text-gray-500 font-medium">Manage bookings, room allocation matrices, and live room occupancy states.</p>
         </div>
+
+        {{-- Calendar View Launcher Button --}}
+        <button 
+            type="button" 
+            @click="showCalendarModal = true"
+            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-bold text-gray-700 shadow-xs transition hover:bg-gray-50 hover:text-gray-900 active:scale-95 cursor-pointer self-start sm:self-auto"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span>View Availability Matrix</span>
+        </button>
     </div>
 
     {{-- Horizontal Tab Navigation Control Track --}}
     <div class="rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
         <div class="flex gap-1 overflow-x-auto pb-1 sm:pb-0">
-            @foreach (['pending' => 'Pending Request', 'approved' => 'Confirmed Matrix', 'checked_in' => 'Checked In', 'checked_out' => 'Archived History'] as $id => $label)
-                <a href="{{ route('reservation', ['tab' => $id]) }}"
-                   class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-all {{ $tab === $id ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                    {{ $label }}
-                </a>
-            @endforeach
+            <button type="button" wire:click="changeTab('pending')"
+                    class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer {{ $currentTab === 'pending' ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50' }}">
+                Pending Request
+            </button>
+            <button type="button" wire:click="changeTab('approved')"
+                    class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer {{ $currentTab === 'approved' ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50' }}">
+                Confirmed Matrix
+            </button>
+            <button type="button" wire:click="changeTab('checked_in')"
+                    class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer {{ $currentTab === 'checked_in' ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50' }}">
+                Checked In
+            </button>
+            <button type="button" wire:click="changeTab('checked_out')"
+                    class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer {{ $currentTab === 'checked_out' ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50' }}">
+                Archived History
+            </button>
         </div>
     </div>
 
-    {{-- Main Booking Records Table --}}
+    {{-- Main Booking Records Table Layout Window Frame --}}
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div class="overflow-x-auto">
             <table class="min-w-[1000px] w-full text-sm text-left">
@@ -40,134 +81,152 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700 font-medium">
-                    @forelse ($bookings as $booking)
-                        <tr class="hover:bg-gray-50/60 transition-colors">
-                            <td class="p-4">
-                                <div class="font-bold text-gray-900">{{ $booking->user?->fullName() ?? 'Unknown Guest' }}</div>
-                                <div class="text-xs text-gray-400 font-medium mt-0.5">{{ $booking->user?->email ?? 'no-email' }}</div>
-                            </td>
-                            <td class="p-4 text-gray-900 font-semibold">
-                                {{ $booking->room?->roomType?->name ?? '—' }} 
-                                <span class="ml-1 text-xs text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md font-bold">#{{ $booking->room?->room_number ?? 'N/A' }}</span>
-                            </td>
-                            <td class="p-4 text-xs text-gray-600">{{ $booking->start_at?->format('M j, Y g:i A') ?? '—' }}</td>
-                            <td class="p-4 text-xs text-gray-600">{{ $booking->end_at?->format('M j, Y g:i A') ?? '—' }}</td>
-                            <td class="p-4">
-                                <x-booking-status :status="$booking->status" />
-                            </td>
-                            <td class="p-4 text-gray-900 font-bold">₱{{ number_format((float) $booking->total_amount, 2) }}</td>
-                            <td class="p-4">
-                                <div class="flex items-center justify-center gap-2">
-                                    <a href="{{ route('reservation', ['tab' => $tab, 'booking' => $booking->id]) }}"
-                                       class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-700 transition">View Details</a>
+                    @php $hasVisibleBookings = false; @endphp
+                    
+                    @foreach($bookings as $bookingItem)
+                        @if(($bookingItem['status'] ?? '') === $currentTab)
+                            @php $hasVisibleBookings = true; @endphp
+                            
+                            <tr class="transition-colors {{ ($bookingItem['is_conflicted'] ?? false) ? 'bg-red-50/40 opacity-70 hover:bg-red-50/60' : 'hover:bg-gray-50/60' }}">
+                                <td class="p-4">
+                                    <div class="font-bold text-gray-900">
+                                        {{ $bookingItem['user']['full_name'] ?? 'Unknown Guest' }}
+                                    </div>
+                                    <div class="text-xs text-gray-400 font-medium mt-0.5">{{ $bookingItem['user']['email'] ?? 'no-email' }}</div>
                                     
-                                    @if ($booking->status === 'pending')
-                                        <form method="POST" action="{{ route('reservation.approve', $booking) }}">
-                                            @csrf
-                                            <button class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 transition">Approve</button>
-                                        </form>
+                                    @if(($bookingItem['is_conflicted'] ?? false))
+                                        <div class="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100/80 px-2 py-0.5 rounded-md mt-1.5 uppercase tracking-wide">
+                                            ⚠️ Blocked: Time Slot Occupied
+                                        </div>
                                     @endif
-                                    @if ($booking->status === 'approved')
-                                        <form method="POST" action="{{ route('reservation.check-in', $booking) }}">
-                                            @csrf
-                                            <button class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition">Check In</button>
-                                        </form>
-                                    @endif
-                                    @if ($booking->status === 'checked_in')
-                                        <form method="POST" action="{{ route('reservation.check-out', $booking) }}">
-                                            @csrf
-                                            <button class="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition">Check Out</button>
-                                        </form>
-                                    @endif
-                                </div>
-                            </td>
-                        </tr>
-                    @empty
+                                </td>
+                                <td class="p-4 text-gray-900 font-semibold">
+                                    <span>{{ ($bookingItem['room'] && $bookingItem['room']['room_type']) ? $bookingItem['room']['room_type']['name'] : '—' }}</span>
+                                    <span class="ml-1 text-xs {{ ($bookingItem['is_conflicted'] ?? false) ? 'text-red-600 bg-red-100/50' : 'text-teal-600 bg-teal-50' }} px-2 py-0.5 rounded-md font-bold">#{{ $bookingItem['room'] ? $bookingItem['room']['room_number'] : 'N/A' }}</span>
+                                </td>
+                                <td class="p-4 text-xs text-gray-600 font-semibold">{{ $bookingItem['start_at_formatted'] ?? '—' }}</td>
+                                <td class="p-4 text-xs text-gray-600">{{ $bookingItem['end_at_formatted'] ?? '—' }}</td>
+                                <td class="p-4">
+                                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold uppercase tracking-wider
+                                        @if(($bookingItem['is_conflicted'] ?? false)) bg-red-100 text-red-800 ring-1 ring-inset ring-red-600/20
+                                        @elseif(($bookingItem['status'] ?? '') === 'pending') bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20
+                                        @elseif(($bookingItem['status'] ?? '') === 'approved') bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-700/20
+                                        @elseif(($bookingItem['status'] ?? '') === 'checked_in') bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20
+                                        @elseif(($bookingItem['status'] ?? '') === 'checked_out') bg-gray-100 text-gray-600 ring-1 ring-inset ring-gray-500/10 @endif">
+                                        {{ ($bookingItem['is_conflicted'] ?? false) ? 'Conflicted' : str_replace('_', ' ', ($bookingItem['status'] ?? '')) }}
+                                    </span>
+                                </td>
+                                <td class="p-4 text-gray-900 font-bold">₱{{ number_format(($bookingItem['total_amount'] ?? 0), 2) }}</td>
+                                <td class="p-4">
+                                    <div class="flex items-center justify-center gap-2">
+                                      {{-- Replace your old button with this one --}}
+<button 
+    type="button" 
+    @click="$dispatch('open-reservation-modal');"
+    wire:click="viewDetails({{ $bookingItem['id'] }})"
+    class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-700 transition cursor-pointer"
+>
+    View Details
+</button>
+                                        
+                                        @if(($bookingItem['status'] ?? '') === 'pending')
+                                            @if(($bookingItem['is_conflicted'] ?? false))
+                                                <button type="button" wire:click="rejectBooking({{ $bookingItem['id'] }})"
+                                                        class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 transition cursor-pointer">
+                                                    Reject Block
+                                                </button>
+                                            @else
+                                                <button type="button" wire:click="approveBooking({{ $bookingItem['id'] }})"
+                                                        class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 transition cursor-pointer">
+                                                    Approve
+                                                </button>
+                                                <button type="button" wire:click="rejectBooking({{ $bookingItem['id'] }})"
+                                                        class="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-300 transition cursor-pointer">
+                                                    Reject
+                                                </button>
+                                            @endif
+                                        @endif
+
+                                        @if(($bookingItem['status'] ?? '') === 'approved')
+                                            <button type="button" wire:click="checkInBooking({{ $bookingItem['id'] }})"
+                                                    class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition cursor-pointer">
+                                                Check In
+                                            </button>
+                                        @endif
+
+                                        @if(($bookingItem['status'] ?? '') === 'checked_in')
+                                            <button type="button" wire:click="checkOutBooking({{ $bookingItem['id'] }})"
+                                                    class="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition cursor-pointer">
+                                                Check Out
+                                            </button>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                        @endif
+                    @endforeach
+
+                    @if(!$hasVisibleBookings)
                         <tr>
                             <td colspan="7" class="p-12 text-center text-gray-400 font-medium">
                                 <div class="text-3xl mb-2">📅</div>
-                                No matching bookings located inside this data target track segment.
+                                No matching bookings located inside this data track segment.
                             </td>
                         </tr>
-                    @endforelse
+                    @endif
                 </tbody>
             </table>
         </div>
     </div>
 
-    {{-- Room Scheduling Calendar Visualizer Component Integration --}}
-    <x-room-availability-calendar
-        :availability="$availability"
-        :rooms="$rooms"
-        :room-types="$roomTypes"
-    />
-</div>
+    {{-- Availability Matrix Calendar Modal Backdrop Canvas Wrapper --}}
+    <div 
+        x-show="showCalendarModal" 
+        class="fixed inset-0 z-50 overflow-y-auto"
+        style="display: none;"
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
+    >
+        <div class="fixed inset-0 bg-gray-900/40 backdrop-blur-xs" @click="showCalendarModal = false"></div>
 
-{{-- Detail Verification Dialog Frame Modal Drawer --}}
-@if ($selectedBooking)
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" 
-     x-data 
-     x-on:keydown.escape.window="window.location='{{ route('reservation', ['tab' => $tab]) }}'">
-    <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl border border-gray-100 flex flex-col">
-        <div class="mb-5 flex items-start justify-between border-b border-gray-100 pb-4">
-            <div>
-                <h3 class="text-lg font-bold text-gray-900">Booking Slip #{{ $selectedBooking->id }}</h3>
-                <p class="text-xs font-medium text-gray-400 mt-0.5">Primary Ledger Account Record</p>
-            </div>
-            <a href="{{ route('reservation', ['tab' => $tab]) }}" class="text-gray-400 hover:text-gray-600 text-lg font-bold transition p-1">✕</a>
-        </div>
-        
-        <dl class="grid gap-4 text-sm sm:grid-cols-2 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-            <div>
-                <dt class="text-xs font-bold text-gray-400 uppercase tracking-wide">Registered Guest</dt>
-                <dd class="font-bold text-gray-900 mt-0.5">{{ $selectedBooking->user?->fullName() }}</dd>
-            </div>
-            <div>
-                <dt class="text-xs font-bold text-gray-400 uppercase tracking-wide">Target Unit Designation</dt>
-                <dd class="font-bold text-gray-900 mt-0.5">{{ $selectedBooking->room?->roomType?->name }} · Room #{{ $selectedBooking->room?->room_number }}</dd>
-            </div>
-            <div>
-                <dt class="text-xs font-bold text-gray-400 uppercase tracking-wide">Status Vector</dt>
-                <dd class="mt-1"><x-booking-status :status="$selectedBooking->status" /></dd>
-            </div>
-            <div>
-                <dt class="text-xs font-bold text-gray-400 uppercase tracking-wide">Total Dynamic Cost</dt>
-                <dd class="font-black text-teal-700 mt-0.5">₱{{ number_format((float) $selectedBooking->total_amount, 2) }}</dd>
-            </div>
-            <div class="border-t border-gray-100 pt-2 sm:col-span-2"></div>
-            <div>
-                <dt class="text-xs font-bold text-gray-400 uppercase tracking-wide">Check-in Operational Window</dt>
-                <dd class="text-gray-700 mt-0.5 font-medium">{{ $selectedBooking->start_at?->format('M j, Y g:i A') }}</dd>
-            </div>
-            <div>
-                <dt class="text-xs font-bold text-gray-400 uppercase tracking-wide">Check-out Operational Window</dt>
-                <dd class="text-gray-700 mt-0.5 font-medium">{{ $selectedBooking->end_at?->format('M j, Y g:i A') ?? '—' }}</dd>
-            </div>
-            <div>
-                <dt class="text-xs font-bold text-gray-400 uppercase tracking-wide">Declared Headcount Capacity</dt>
-                <dd class="text-gray-700 mt-0.5 font-bold">{{ $selectedBooking->guests }} Registered Pax</dd>
-            </div>
-            @if ($selectedBooking->message)
-                <div class="sm:col-span-2 border-t border-gray-100 pt-3">
-                    <dt class="text-xs font-bold text-gray-400 uppercase tracking-wide">Guest Verification Message Notes</dt>
-                    <dd class="text-xs text-gray-600 bg-white border rounded-lg p-2.5 mt-1 font-medium italic">{{ $selectedBooking->message }}</dd>
+        <div class="flex min-h-full items-center justify-center p-4 sm:p-6">
+            <div 
+                x-show="showCalendarModal"
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave="transition ease-in duration-200"
+                x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                class="relative w-full max-w-5xl transform rounded-2xl bg-white p-6 shadow-2xl transition-all border border-gray-100"
+            >
+                <div class="absolute top-4 right-4 z-10">
+                    <button 
+                        @click="showCalendarModal = false" 
+                        type="button" 
+                        class="rounded-xl border border-gray-200 bg-white p-2 text-gray-400 shadow-2xs hover:text-gray-700 hover:bg-gray-50 transition active:scale-95 cursor-pointer"
+                    >
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
-            @endif
-        </dl>
 
-        <div class="mt-6 flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-4">
-            @if ($selectedBooking->status === 'pending')
-                <form method="POST" action="{{ route('reservation.approve', $selectedBooking) }}">@csrf<button class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">Approve Slip</button></form>
-            @endif
-            @if ($selectedBooking->status === 'approved')
-                <form method="POST" action="{{ route('reservation.check-in', $selectedBooking) }}">@csrf<button class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">Execute Check-In</button></form>
-            @endif
-            @if ($selectedBooking->status === 'checked_in')
-                <form method="POST" action="{{ route('reservation.check-out', $selectedBooking) }}">@csrf<button class="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-700">Finalize Check-Out</button></form>
-            @endif
-            <a href="{{ route('reservation', ['tab' => $tab]) }}" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition">Close View</a>
+                <div class="mt-2">
+                    <x-room-availability-calendar
+                        :availability="$availability"
+                        :rooms="$rooms"
+                        :roomTypes="$roomTypes"
+                    />
+                </div>
+            </div>
         </div>
     </div>
+
+    {{-- Target child layout initialization injection --}}
+    <livewire:reservation-details-modal />
 </div>
-@endif
-@endsection

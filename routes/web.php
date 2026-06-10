@@ -5,9 +5,9 @@ use App\Http\Controllers\AuditController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FrontOfficeController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\SettingsController;
+use App\Livewire\ReservationsDesk;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login');
@@ -18,12 +18,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
-    // FIXED: Ensured route role definitions align perfectly with database seed state strings
+    // Livewire Architecture: Points directly to your component class instead of an old controller
     Route::middleware('role:super_admin,reservation')->group(function () {
-        Route::get('/reservation', [ReservationController::class, 'index'])->name('reservation');
-        Route::post('/reservation/{booking}/approve', [ReservationController::class, 'approve'])->name('reservation.approve');
-        Route::post('/reservation/{booking}/check-in', [ReservationController::class, 'checkIn'])->name('reservation.check-in');
-        Route::post('/reservation/{booking}/check-out', [ReservationController::class, 'checkOut'])->name('reservation.check-out');
+        Route::get('/reservation', ReservationsDesk::class)->name('reservation');
     });
 
     Route::middleware('role:super_admin,frontoffice')->group(function () {
@@ -32,6 +29,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/frontoffice/receipts', [FrontOfficeController::class, 'storeReceipt'])->name('frontoffice.receipts.store');
         Route::get('/frontoffice/receipts/{receipt}', [FrontOfficeController::class, 'viewReceipt'])->name('frontoffice.receipt');
 
+        // Note: You can migrate these pages to Livewire components later using the exact same approach!
         Route::get('/archived', [ArchivedController::class, 'index'])->name('archived');
         Route::get('/audit', [AuditController::class, 'index'])->name('audit');
     });

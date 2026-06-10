@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Booking;
 use App\Models\PaymentReceipt;
 use App\Services\Booking\BookingService;
 use App\Services\Room\RoomService;
@@ -18,22 +19,46 @@ class FrontOfficeController extends Controller
         private readonly RoomService $rooms,
     ) {}
 
+    /**
+     * Display the front office interface with lazy tab isolation.
+     */
     public function index(Request $request): View
     {
+        // 1. Determine active layout viewport context cleanly
         $tab = $request->string('tab', 'bookings')->toString();
+        if (!in_array($tab, ['bookings', 'receipts'], true)) {
+            $tab = 'bookings';
+        }
+
+        // 2. High-Performance Lazy Allocation: Eliminate cross-ocean network overhead
+        $bookingsPayload = [];
+        $roomsPayload = [];
+        $receiptsPayload = [];
+
+        if ($tab === 'bookings') {
+            // Load live dynamic tracking streams
+            $bookingsPayload = $this->bookings->getAll();
+            $roomsPayload = $this->rooms->getRooms();
+        } elseif ($tab === 'receipts') {
+            // Only pull receipts from cloud infrastructure if the user is looking at the tab
+            $receiptsPayload = PaymentReceipt::query()
+                ->latest()
+                ->get();
+        }
 
         return view('frontoffice.index', [
             'activeMenu'        => 'frontoffice',
-            'tab'               => in_array($tab, ['bookings', 'receipts'], true) ? $tab : 'bookings',
-            'bookings'          => $this->bookings->getAll(),
-            'rooms'             => $this->rooms->getRooms(),
+            'tab'               => $tab,
+            'bookings'          => $bookingsPayload,
+            'rooms'             => $roomsPayload,
+            'receipts'          => $receiptsPayload,
             'selectedBookingId' => $request->integer('booking') ?: null,
-            // Receipts table may not exist yet during migration.
-            // Keep the front office page working; receipts tab will show "No receipt uploads found" until the table exists.
-            // 'receipts'          => PaymentReceipt::query()->latest()->get(),
         ]);
     }
 
+    /**
+     * Update systemic record layouts cleanly using standard Model features.
+     */
     public function update(Request $request, int $booking): RedirectResponse
     {
         $validated = $request->validate([
@@ -51,31 +76,40 @@ class FrontOfficeController extends Controller
             'has_senior'      => ['nullable', 'boolean'],
         ]);
 
-        $this->bookings->updateBookingDetails($booking, [
+        // FIXED: Replaced non-existent updateBookingDetails method with standard Eloquent lifecycle mechanics
+        $bookingModel = Booking::findOrFail($booking);
+        
+        $bookingModel->update([
             ...$validated,
             'has_child'  => $request->boolean('has_child'),
             'has_pwd'    => $request->boolean('has_pwd'),
             'has_senior' => $request->boolean('has_senior'),
-        ], $request->user());
+        ]);
 
         return redirect()
             ->route('frontoffice', ['tab' => 'bookings', 'booking' => $booking])
             ->with('status', 'Booking updated successfully.');
     }
 
+    /**
+     * Write multi-part binary streaming files straight to application disk layers.
+     */
     public function storeReceipt(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'receipt' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
+            'booking_id' => ['required', 'exists:bookings,id'],
+            'amount'     => ['required', 'numeric', 'min:0'],
+            'receipt'    => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
         ]);
 
         $file = $validated['receipt'];
         $path = $file->store('receipts', 'local');
 
+        // FIXED: Aligned payload tracking schema with your precise PostgreSQL data definitions
         PaymentReceipt::query()->create([
-            'original_filename' => $file->getClientOriginalName(),
-            'storage_path'      => $path,
-            'size'              => $file->getSize() ?: 0,
+            'booking_id'       => (int) $validated['booking_id'],
+            'amount'           => $validated['amount'],
+            'reference_number' => $path, // Safely stores references matching layout structures
         ]);
 
         return redirect()
@@ -83,22 +117,24 @@ class FrontOfficeController extends Controller
             ->with('status', 'Receipt uploaded successfully.');
     }
 
-    public function viewReceipt(int $receipt): StreamedResponse
+    /**
+     * Download or view storage items safely.
+     */
+    public function viewReceipt(string $receipt): StreamedResponse
     {
         $record = PaymentReceipt::query()->findOrFail($receipt);
-        $path = $record->storage_path;
+        $path = $record->reference_number;
 
         /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
         $disk = Storage::disk('local');
 
         abort_unless($disk->exists($path), 404);
 
-        // FIXED: Explicitly type-hinted the concrete adapter instance above to satisfy static analysis engines
         $mimeType = $disk->mimeType($path) ?: 'application/octet-stream';
 
-        return $disk->download($path, $record->original_filename, [
+        return $disk->download($path, basename($path), [
             'Content-Type'        => $mimeType,
-            'Content-Disposition' => 'inline; filename="' . $record->original_filename . '"',
+            'Content-Disposition' => 'inline; filename="' . basename($path) . '"',
         ]);
     }
 }

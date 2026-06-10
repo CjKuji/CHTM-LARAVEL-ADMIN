@@ -4,9 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+// 1. Import the factory trait framework namespace
+use Illuminate\Database\Eloquent\Factories\HasFactory; 
 
 class Booking extends Model
 {
+    // 2. Enable factory mutations on this specific database model structure
+    use HasFactory; 
+
     protected $table = 'public.bookings';
 
     public $timestamps = false;

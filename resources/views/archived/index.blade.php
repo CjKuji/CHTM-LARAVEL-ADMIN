@@ -31,116 +31,99 @@
 
 @section('content')
 <div class="space-y-6 p-4 sm:p-6">
+    {{-- Header Content --}}
     <div>
-        <h1 class="text-xl font-semibold text-gray-900">Archived Bookings</h1>
-        <p class="text-sm text-gray-500">Review completed and archived historical reservation records.</p>
+        <h1 class="text-xl font-bold text-gray-900 tracking-tight">Archived Bookings</h1>
+        <p class="text-xs text-gray-500 font-medium">Review completed and archived historical reservation records from the centralized ledger engine.</p>
     </div>
 
-    <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_450px]">
-        <div class="flex h-[calc(100vh-220px)] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            @if ($archivedBookings->isEmpty())
-                <div class="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-sm text-gray-400">
-                    <i class="ti ti-archive text-3xl text-gray-300"></i>
-                    <span>No archived bookings found.</span>
-                </div>
-            @else
-                <div class="flex-1 overflow-auto">
-                    <table class="w-full divide-y divide-gray-200 text-sm">
-                        <thead class="sticky top-0 z-10 bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-3.5 text-left font-semibold text-gray-700">Guest</th>
-                                <th class="px-4 py-3.5 text-left font-semibold text-gray-700">Room</th>
-                                <th class="px-4 py-3.5 text-left font-semibold text-gray-700">Stay Dates</th>
-                                <th class="px-4 py-3.5 text-left font-semibold text-gray-700">Total Charged</th>
-                                <th class="px-4 py-3.5 text-left font-semibold text-gray-700">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100 bg-white">
-                            @foreach ($archivedBookings as $booking)
-                                <tr @click="window.location.href = '{{ route('archived', ['booking' => $booking->id]) }}'"
-                                    class="cursor-pointer transition duration-150 {{ ($selectedBooking?->id ?? null) === $booking->id ? 'bg-teal-50/60 ring-1 ring-inset ring-teal-100 font-medium' : 'hover:bg-gray-50/80' }}">
-                                    <td class="whitespace-nowrap px-4 py-3.5 text-gray-900">
+    {{-- Main Booking Records Table Layout Window Frame --}}
+    <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="min-w-[1000px] w-full text-sm text-left">
+                <thead class="border-b border-gray-200 bg-gray-50/70 text-xs font-bold uppercase tracking-wider text-gray-500">
+                    <tr>
+                        <th class="p-4">Guest Information</th>
+                        <th class="p-4">Assigned Room Unit</th>
+                        <th class="p-4">Expected Check-In</th>
+                        <th class="p-4">Expected Check-Out</th>
+                        <th class="p-4">Status Token</th>
+                        <th class="p-4">Total Amount</th>
+                        <th class="p-4 text-center">Action Framework</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700 font-medium">
+                    @if ($archivedBookings->isEmpty())
+                        <tr>
+                            <td colspan="7" class="p-12 text-center text-gray-400 font-medium">
+                                <div class="text-3xl mb-2">📁</div>
+                                No historical matching records located inside this archive dataset tracking matrix.
+                            </td>
+                        </tr>
+                    @else
+                        @foreach ($archivedBookings as $booking)
+                            <tr class="hover:bg-gray-50/60 transition-colors">
+                                {{-- Guest Identity Tracks with Decrypted Fallback Labels --}}
+                                <td class="p-4">
+                                    <div class="font-bold text-gray-900">
                                         {{ trim(($booking->guest_fname ?? '').' '.($booking->guest_lname ?? '')) ?: 'Archived Guest' }}
-                                    </td>
-                                    <td class="px-4 py-3.5 text-gray-700">
-                                        <span class="font-medium text-gray-900">#{{ $booking->room_number ?? '—' }}</span>
-                                        <div class="text-xs text-gray-400 font-normal">{{ $booking->room_type_name }}</div>
-                                    </td>
-                                    <td class="whitespace-nowrap px-4 py-3.5 text-gray-600">
-                                        {{ $booking->start_at?->format('M j, Y') }} — {{ $booking->end_at?->format('M j, Y') }}
-                                    </td>
-                                    <td class="whitespace-nowrap px-4 py-3.5 font-semibold text-gray-900">
-                                        ₱{{ number_format((float) $booking->total_amount, 2) }}
-                                    </td>
-                                    <td class="whitespace-nowrap px-4 py-3.5">
-                                        <span class="inline-flex items-center rounded-md bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700 ring-1 ring-inset ring-teal-600/10 capitalize">
-                                            {{ $booking->status ?? 'archived' }}
-                                        </span>
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-                <div class="flex items-center justify-center gap-2 border-t bg-gray-50 px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
-                    <i class="ti ti-lock text-sm"></i> End of Historical Archive Records
-                </div>
-            @endif
-        </div>
+                                    </div>
+                                    <div class="text-xs text-gray-400 font-medium mt-0.5">
+                                        {{ $booking->user->email ?? 'no-linked-email@system.internal' }}
+                                    </div>
+                                </td>
 
-        <aside class="lg:sticky lg:top-24">
-            @if ($selectedBooking)
-                <div id="printable-folio-card" class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition duration-200">
-                    <div class="flex items-start justify-between border-b border-gray-100 pb-4">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900 tracking-tight">Guest Folio Invoice</h3>
-                            <p class="text-xs font-medium text-gray-400 mt-0.5">Booking Reference Code: #{{ $selectedBooking->original_booking_id ?? $selectedBooking->id }}</p>
-                        </div>
-                        <i class="ti ti-receipt text-2xl text-gray-300 print-hide"></i>
-                    </div>
-                    
-                    <dl class="mt-5 space-y-4 text-sm">
-                        <div class="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                            <dt class="text-gray-400">Primary Guest</dt>
-                            <dd class="font-semibold text-gray-900">{{ trim(($selectedBooking->guest_fname ?? '').' '.($selectedBooking->guest_lname ?? '')) }}</dd>
-                        </div>
-                        <div class="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                            <dt class="text-gray-400">Assigned Quarters</dt>
-                            <dd class="text-gray-900 text-right">
-                                <span class="font-medium text-gray-900">Room #{{ $selectedBooking->room_number }}</span>
-                                <div class="text-xs text-gray-400">{{ $selectedBooking->room_type_name }} (Floor {{ $selectedBooking->room_floor ?? '1' }})</div>
-                            </dd>
-                        </div>
-                        <div class="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                            <dt class="text-gray-400">Check-In Timestamp</dt>
-                            <dd class="font-medium text-gray-800">{{ $selectedBooking->checked_in_at?->format('M j, Y g:i A') ?? '—' }}</dd>
-                        </div>
-                        <div class="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                            <dt class="text-gray-400">Check-Out Timestamp</dt>
-                            <dd class="font-medium text-gray-800">{{ $selectedBooking->checked_out_at?->format('M j, Y g:i A') ?? '—' }}</dd>
-                        </div>
-                        <div class="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                            <dt class="text-gray-400">Settlement Method</dt>
-                            <dd class="font-medium uppercase tracking-wider text-gray-800 text-xs bg-gray-100 px-2 py-0.5 rounded">{{ $selectedBooking->payment_method ?? '—' }}</dd>
-                        </div>
-                        <div class="flex items-center justify-between pt-2">
-                            <dt class="text-base font-semibold text-gray-900">Total Final Balance</dt>
-                            <dd class="text-xl font-bold text-teal-700">₱{{ number_format((float) $selectedBooking->total_amount, 2) }}</dd>
-                        </div>
-                    </dl>
-                    
-                    <button onclick="window.print()" class="print-hide mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2">
-                        <i class="ti ti-printer text-base"></i>
-                        <span>Print Folio Receipt</span>
-                    </button>
-                </div>
-            @else
-                <div class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-12 text-center text-gray-400">
-                    <i class="ti ti-pointer text-3xl text-gray-300 mb-2"></i>
-                    <p class="text-sm font-medium">Select an archived booking row to generate and view full folio details.</p>
-                </div>
-            @endif
-        </aside>
+                                {{-- Room Placement Architecture Data Fields --}}
+                                <td class="p-4 text-gray-900 font-semibold">
+                                    <span>{{ $booking->room_type_name ?? '—' }}</span>
+                                    <span class="ml-1 text-xs text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md font-bold">
+                                        #{{ $booking->room_number ?? 'N/A' }}
+                                    </span>
+                                </td>
+
+                                {{-- System Chronology Timestamps --}}
+                                <td class="p-4 text-xs text-gray-600 font-semibold">
+                                    {{ $booking->start_at?->format('M d, Y') ?? '—' }}
+                                    <div class="text-[10px] text-gray-400 font-normal mt-0.5">Scheduled Arrival</div>
+                                </td>
+                                <td class="p-4 text-xs text-gray-600">
+                                    {{ $booking->end_at?->format('M d, Y') ?? '—' }}
+                                    <div class="text-[10px] text-gray-400 font-normal mt-0.5">Scheduled Release</div>
+                                </td>
+
+                                {{-- Immutable Status Token Flags --}}
+                                <td class="p-4">
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-teal-700 ring-1 ring-inset ring-teal-600/10">
+                                        {{ $booking->status ?? 'archived' }}
+                                    </span>
+                                </td>
+
+                                {{-- Total Ledger Charges --}}
+                                <td class="p-4 text-gray-900 font-bold">
+                                    ₱{{ number_format((float) ($booking->total_amount ?? 0), 2) }}
+                                </td>
+
+                                {{-- Execution Event Dispatches --}}
+                                <td class="p-4 text-center">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button 
+    type="button" 
+    @click="$dispatch('open-archive-modal'); $dispatch('view-archive-details', { id: {{ $booking->id }} })"
+    class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-700 transition active:scale-95 cursor-pointer"
+>
+    View Details
+</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    @endif
+                </tbody>
+            </table>
+        </div>
     </div>
+
+    {{-- Targeted Archive Isolation Modal Injection --}}
+    <livewire:archived-reservation-details-modal />
 </div>
 @endsection

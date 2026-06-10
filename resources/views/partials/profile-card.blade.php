@@ -31,7 +31,7 @@
         {{-- Backdrop Layer Dismissal Target --}}
         <div x-show="open" x-cloak class="fixed inset-0 z-40" @click="open = false"></div>
 
-        {{-- Menu Option Dropdown Panel card --}}
+        {{-- Menu Option Dropdown Panel Card --}}
         <div x-show="open" x-cloak
              x-transition:enter="transition ease-out duration-100"
              x-transition:enter-start="transform opacity-0 scale-95"
@@ -39,7 +39,7 @@
              x-transition:leave="transition ease-in duration-75"
              x-transition:leave-start="transform opacity-100 scale-100"
              x-transition:leave-end="transform opacity-0 scale-95"
-             class="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl shadow-pink-200/40">
+             class="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl shadow-pink-200/40">
             
             <div class="flex items-center justify-between border-b border-gray-100 bg-gray-50/80 px-4 py-3">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Account Options</h3>
