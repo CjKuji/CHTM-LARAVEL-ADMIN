@@ -1,4 +1,5 @@
-<div x-data="{ showCalendarModal: false }" class="space-y-6">
+{{-- Added wire:poll.10s to trigger automatic component updates every 10 seconds --}}
+<div x-data="{ showCalendarModal: false }" wire:poll.10s="loadBookingsData" class="space-y-6">
     {{-- Global Notification Toast Track managed by Alpine --}}
     <div id="global-alert-container" class="fixed top-4 right-4 z-[100] space-y-2 pointer-events-none"
          x-data="{ 
@@ -119,15 +120,14 @@
                                 <td class="p-4 text-gray-900 font-bold">₱{{ number_format(($bookingItem['total_amount'] ?? 0), 2) }}</td>
                                 <td class="p-4">
                                     <div class="flex items-center justify-center gap-2">
-                                      {{-- Replace your old button with this one --}}
-<button 
-    type="button" 
-    @click="$dispatch('open-reservation-modal');"
-    wire:click="viewDetails({{ $bookingItem['id'] }})"
-    class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-700 transition cursor-pointer"
->
-    View Details
-</button>
+                                        <button 
+                                            type="button" 
+                                            @click="$dispatch('open-reservation-modal');"
+                                            wire:click="viewDetails({{ $bookingItem['id'] }})"
+                                            class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-700 transition cursor-pointer"
+                                        >
+                                            View Details
+                                        </button>
                                         
                                         @if(($bookingItem['status'] ?? '') === 'pending')
                                             @if(($bookingItem['is_conflicted'] ?? false))

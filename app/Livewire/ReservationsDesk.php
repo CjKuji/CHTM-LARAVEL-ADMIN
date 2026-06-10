@@ -10,6 +10,9 @@ use App\Models\ArchivedBooking;
 use Livewire\Attributes\On;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail; 
+use Illuminate\Support\Facades\Log;
+use App\Mail\BookingStatusMail;       
 use Illuminate\View\View;
 use Carbon\Carbon;
 
@@ -149,7 +152,8 @@ class ReservationsDesk extends Component
     #[On('executeApprove')]
     public function approveBooking(int $bookingId): void
     {
-        $booking = Booking::find($bookingId);
+        // Eager load relations so that they are instantly available inside the email payload
+        $booking = Booking::with(['user', 'room.roomType'])->find($bookingId);
         if (!$booking) return;
 
         $hasConflict = Booking::where('room_id', $booking->room_id)
@@ -168,7 +172,21 @@ class ReservationsDesk extends Component
             'approved_by' => Auth::id() ? (string) Auth::id() : null,
         ]);
 
-        $this->dispatch('notify', message: 'Booking reservation confirmed successfully!');
+        // --- DIAGNOSTIC BREAKDOWN FOR TESTING ENVIRONMENT ---
+        if (!$booking->user) {
+            Log::warning("Email Routing Skipped: Booking record ID {$bookingId} does not possess a linked User relation model profile.");
+            $this->dispatch('notify', message: 'Confirmed! Note: No user profile linked to email.');
+        } elseif (empty($booking->user->email)) {
+            Log::warning("Email Routing Skipped: The linked User profile model matching Booking ID {$bookingId} contains an empty email data attribute.");
+            $this->dispatch('notify', message: 'Confirmed! Note: Target user email property is empty.');
+        } else {
+            Log::info("Mail Dispatch Handshake Initialized: Sending confirmation to customer path [{$booking->user->email}]");
+            
+            Mail::to($booking->user->email)->send(new BookingStatusMail($booking, 'approved'));
+            
+            $this->dispatch('notify', message: 'Booking reservation confirmed and email sent successfully!');
+        }
+
         $this->refreshComponentState();
     }
 
@@ -178,13 +196,27 @@ class ReservationsDesk extends Component
     #[On('executeReject')]
     public function rejectBooking(int $bookingId): void
     {
-        $booking = Booking::find($bookingId);
+        // Eager load customer data to target dispatch delivery parameters
+        $booking = Booking::with(['user'])->find($bookingId);
+        
         if ($booking) {
             $booking->update([
                 'status'      => 'rejected',
                 'rejected_by' => Auth::id() ? (string) Auth::id() : null,
             ]);
-            $this->dispatch('notify', message: 'Reservation request rejected and space liberated.');
+
+            // --- DIAGNOSTIC BREAKDOWN FOR TESTING ENVIRONMENT ---
+            if (!$booking->user) {
+                Log::warning("Email Routing Skipped: Rejection ID {$bookingId} does not possess a linked User relation model profile.");
+            } elseif (empty($booking->user->email)) {
+                Log::warning("Email Routing Skipped: The linked User profile model matching Rejection ID {$bookingId} contains an empty email data attribute.");
+            } else {
+                Log::info("Mail Dispatch Handshake Initialized: Sending cancellation notice to customer path [{$booking->user->email}]");
+                
+                Mail::to($booking->user->email)->send(new BookingStatusMail($booking, 'rejected'));
+            }
+
+            $this->dispatch('notify', message: 'Reservation request rejected and notification email processed.');
             $this->refreshComponentState();
         }
     }
@@ -264,7 +296,7 @@ class ReservationsDesk extends Component
                 'checked_out_at' => $now,
                 'checked_out_by' => $authUserId,
             ]);
-        }); // Correctly closed function block matching DB::transaction
+        }); 
 
         $this->dispatch('notify', message: 'Guest checked out successfully and stay details archived.');
         $this->refreshComponentState();

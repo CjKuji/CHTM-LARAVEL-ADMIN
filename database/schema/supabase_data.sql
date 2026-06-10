@@ -63,7 +63,7 @@ INSERT INTO public.users VALUES ('3fdbc133-a252-44df-a5b2-ef19047919c9', 'CHTM',
 INSERT INTO public.users VALUES ('3e222f72-735a-4ba5-86dc-302c42c0e484', 'CHTM', 'HOUSEKEEPING', '2026-05-21 01:33:38', 'housekeeper', NULL, NULL, '2026-06-07 03:53:15.034578+00');
 INSERT INTO public.users VALUES ('d0a4b51d-c108-4db6-b737-1ef6b0086c7e', 'Aleczander', 'Mendoza', '2026-04-28 07:37:44.064975', 'user', '202311255@gordoncollege.edu.ph', NULL, '2026-06-07 03:53:15.034578+00');
 
-
+                                
 ALTER TABLE public.users ENABLE TRIGGER ALL;
 
 --

@@ -4,12 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-// 1. Import the factory trait framework namespace
 use Illuminate\Database\Eloquent\Factories\HasFactory; 
 
 class Booking extends Model
 {
-    // 2. Enable factory mutations on this specific database model structure
     use HasFactory; 
 
     protected $table = 'public.bookings';
@@ -40,11 +38,17 @@ class Booking extends Model
         'checked_out_by',
     ];
 
+    /**
+     * Relationship tracking link pointing to the customer profile
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /**
+     * Relationship link mapping to physical inventory unit
+     */
     public function room(): BelongsTo
     {
         return $this->belongsTo(Room::class, 'room_id');
@@ -65,6 +69,9 @@ class Booking extends Model
         return $this->belongsTo(User::class, 'checked_out_by');
     }
 
+    /**
+     * Automatic Type Casting Definition Array
+     */
     protected function casts(): array
     {
         return [
