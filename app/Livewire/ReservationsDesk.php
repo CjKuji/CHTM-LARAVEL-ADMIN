@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use App\Mail\BookingStatusMail;       
 use Illuminate\View\View;
 use Carbon\Carbon;
+use App\Services\Encryption\Aes256GcmEncrypter;
 
 class ReservationsDesk extends Component
 {
@@ -66,12 +67,135 @@ class ReservationsDesk extends Component
             ->sortBy('start_at')
             ->map(function ($booking) use ($approvedBookings) {
                 $userData = null;
-                
+
+                // prepare Aes256Gcm encrypter
+                $aes = null;
+                try {
+                    $aes = Aes256GcmEncrypter::fromConfiguration();
+                } catch (\Throwable $e) {
+                    $aes = null;
+                }
+
+                // Robust decrypt attempt using the project's AES-256-GCM encrypter first.
+                // Handles both:
+                //  - base64(iv|tag|ciphertext)
+                //  - base64(json{iv,tag,value}) where iv/tag/value are themselves base64
+                $attemptDecrypt = function (?string $raw) use ($aes) {
+                    if (empty($raw) || !is_string($raw)) {
+                        return null;
+                    }
+
+                    // Helper: decrypt Laravel-style envelope if present
+                    $tryDecryptLaravelEnvelope = function (string $payload) use ($aes) : ?string {
+                        // Payload itself is base64-encoded JSON
+                        $maybeDecoded = @base64_decode($payload, true);
+                        if ($maybeDecoded === false) {
+                            return null;
+                        }
+
+                        $maybeJson = json_decode($maybeDecoded, true);
+                        if (!is_array($maybeJson)) {
+                            return null;
+                        }
+
+                        // Case A: json contains iv/tag/value (all base64). Our encrypter expects base64(iv|tag|ciphertext)
+                        if (isset($maybeJson['iv'], $maybeJson['tag'], $maybeJson['value']) && $aes) {
+                            try {
+                                $iv = base64_decode((string)$maybeJson['iv'], true);
+                                $tag = base64_decode((string)$maybeJson['tag'], true);
+                                $cipher = base64_decode((string)$maybeJson['value'], true);
+
+                                if ($iv === false || $tag === false || $cipher === false) {
+                                    return null;
+                                }
+
+                                // Our encrypter expects base64(iv|tag|ciphertext)
+                                $packed = $iv . $tag . $cipher; // binary
+                                $reencoded = base64_encode($packed);
+
+                                $out = $aes->decrypt($reencoded);
+                                if ($out !== null && $out !== '' && $out !== $reencoded) {
+                                    return $out;
+                                }
+
+                                // If auth failed, decrypt() returns original payload; ignore here
+                                return null;
+                            } catch (\Throwable) {
+                                return null;
+                            }
+                        }
+
+                        // Case B (less common): json contains value that is itself a payload
+                        if (isset($maybeJson['value']) && is_string($maybeJson['value']) && $aes) {
+                            $candidate = $maybeJson['value'];
+                            try {
+                                $out = $aes->decrypt($candidate);
+                                if ($out !== null && $out !== '' && $out !== $candidate) {
+                                    return $out;
+                                }
+                            } catch (\Throwable) {
+                                return null;
+                            }
+                        }
+
+                        return null;
+                    };
+
+                    // 1) Try Laravel envelope first (this matches your DB examples)
+                    if ($aes) {
+                        $out = $tryDecryptLaravelEnvelope($raw);
+                        if ($out !== null) {
+                            return $out;
+                        }
+                    }
+
+                    // 2) Try AES encrypter on raw payload (base64(iv|tag|ciphertext))
+                    if ($aes) {
+                        try {
+                            $out = $aes->decrypt($raw);
+                            if ($out !== null && $out !== '' && $out !== $raw) {
+                                return $out;
+                            }
+                        } catch (\Throwable) {}
+
+                        // try decode-then-decode again (some payloads are double-encoded)
+                        $decodedRaw = @base64_decode($raw, true);
+                        if ($decodedRaw !== false) {
+                            try {
+                                $out2 = $aes->decrypt(base64_encode($decodedRaw));
+                                if ($out2 !== null && $out2 !== '' && $out2 !== $raw) {
+                                    return $out2;
+                                }
+                            } catch (\Throwable) {}
+                        }
+                    }
+
+                    // 3) Fallback to Laravel Crypt facade
+                    try {
+                        return \Illuminate\Support\Facades\Crypt::decryptString($raw);
+                    } catch (\Throwable) {}
+
+                    return null;
+                };
+
                 if ($booking->user) {
+                    try {
+                        $rawEmail = $booking->user->getRawOriginal('email') ?? $booking->user->email ?? null;
+                    } catch (\Throwable) {
+                        $rawEmail = $booking->user->email ?? null;
+                    }
+
+                    $decryptedEmail = $attemptDecrypt($rawEmail);
+
+                    // If decryption failed, but raw looks like plain email, use it; otherwise placeholder
+                    if ($decryptedEmail === null) {
+                        $decryptedEmail = is_string($rawEmail) && strpos($rawEmail, '@') !== false ? $rawEmail : 'Encrypted (AES-256-GCM)';
+                    }
+
                     $userData = [
-                        'id'         => (string) $booking->user->getKey(),
-                        'full_name'  => $booking->user->fullName(),
-                        'email'      => $booking->user->email,
+                        'id'        => (string) $booking->user->getKey(),
+                        'full_name' => $booking->user->fullName(),
+                        'email'     => $decryptedEmail,
                     ];
                 }
 
@@ -91,19 +215,73 @@ class ReservationsDesk extends Component
                     });
                 }
 
+                $placeholder = 'Encrypted (AES-256-GCM)';
+
+                $safe = function (string $attr, $default = null) use ($booking, $placeholder) {
+                    try {
+                        $val = $booking->{$attr};
+                        return $val === null ? $default : $val;
+                    } catch (\Throwable) {
+                        return $placeholder;
+                    }
+                };
+
+                // Decrypt numeric fields: prefer raw DB value to avoid casts, then attempt decrypt
+                $decryptNumeric = function (string $attr, $default = null) use ($booking, $attemptDecrypt, $placeholder) {
+                    try {
+                        $raw = null;
+                        try {
+                            $raw = $booking->getRawOriginal($attr);
+                        } catch (\Throwable) {
+                            $raw = $booking->{$attr} ?? null;
+                        }
+
+                        if ($raw === null) {
+                            return $default;
+                        }
+
+                        if (is_numeric($raw)) {
+                            return number_format((float) $raw, 2, '.', '');
+                        }
+
+                        if (is_string($raw) && $raw !== '') {
+                            $dec = $attemptDecrypt($raw);
+                            if ($dec === null) {
+                                return $placeholder;
+                            }
+                            if (is_numeric($dec)) {
+                                return number_format((float) $dec, 2, '.', '');
+                            }
+                            return $dec;
+                        }
+
+                        return $default;
+                    } catch (\Throwable) {
+                        return $placeholder;
+                    }
+                };
+
+                $totalAmount = $decryptNumeric('total_amount', null);
+                $priceAtBooking = $decryptNumeric('price_at_booking', null);
+
                 return [
-                    'id'                  => $booking->id,
-                    'status'              => $booking->status,
-                    'total_amount'        => $booking->total_amount,
-                    'guests'              => $booking->guests ?? 1,
-                    'message'             => $booking->message ?? '',
-                    'start_at'            => $booking->start_at,
-                    'end_at'              => $booking->end_at,
-                    'start_at_formatted'  => $booking->start_at ? Carbon::parse($booking->start_at)->format('M d, Y h:i A') : '—',
-                    'end_at_formatted'    => $booking->end_at ? Carbon::parse($booking->end_at)->format('M d, Y h:i A') : '—',
-                    'user'                => $userData,
-                    'room'                => $booking->room ? $booking->room->toArray() : null,
-                    'is_conflicted'       => $isConflicted, 
+                    'id'                 => $booking->id,
+                    'status'             => $booking->status,
+                    'total_amount'       => $totalAmount,
+                    'price_at_booking'   => $priceAtBooking,
+                    'has_child'          => $safe('has_child'),
+                    'has_pwd'            => $safe('has_pwd'),
+                    'has_senior'         => $safe('has_senior'),
+                    'guests'             => $safe('guests', 1),
+                    'extra_beds'         => $safe('extra_beds', 0),
+                    'message'            => $booking->message ?? '',
+                    'start_at'           => $booking->start_at,
+                    'end_at'             => $booking->end_at,
+                    'start_at_formatted' => $booking->start_at ? Carbon::parse($booking->start_at)->format('M d, Y h:i A') : '—',
+                    'end_at_formatted'   => $booking->end_at ? Carbon::parse($booking->end_at)->format('M d, Y h:i A') : '—',
+                    'user'               => $userData,
+                    'room'               => $booking->room ? $booking->room->toArray() : null,
+                    'is_conflicted'      => $isConflicted,
                 ];
             })
             ->values()

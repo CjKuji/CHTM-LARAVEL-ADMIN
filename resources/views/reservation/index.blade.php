@@ -117,7 +117,15 @@
                                         {{ ($bookingItem['is_conflicted'] ?? false) ? 'Conflicted' : str_replace('_', ' ', ($bookingItem['status'] ?? '')) }}
                                     </span>
                                 </td>
-                                <td class="p-4 text-gray-900 font-bold">₱{{ number_format(($bookingItem['total_amount'] ?? 0), 2) }}</td>
+                                <td class="p-4 text-gray-900 font-bold">
+                                    @if(is_numeric($bookingItem['total_amount'] ?? null))
+                                        ₱{{ number_format((float) $bookingItem['total_amount'], 2) }}
+                                    @else
+                                        <span class="text-amber-600">
+                                            {{ $bookingItem['total_amount'] }}
+                                        </span>
+                                    @endif
+                                </td>
                                 <td class="p-4">
                                     <div class="flex items-center justify-center gap-2">
                                         <button 
