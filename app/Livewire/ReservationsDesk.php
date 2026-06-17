@@ -23,6 +23,13 @@ class ReservationsDesk extends Component
     public string $currentTab = 'pending';
     public ?array $selectedBooking = null;
 
+    public const RESERVATION_TABS = [
+        'pending'     => 'Pending Request',
+        'approved'    => 'Confirmed',
+        'checked_in'  => 'Checked In',
+        'checked_out' => 'Archived History',
+    ];
+
     // Type-hinted state variables for Alpine Synchronization
     public int $selectedMonth;
     public int $selectedYear;
@@ -51,7 +58,15 @@ class ReservationsDesk extends Component
      */
     public function changeTab(string $tabName): void
     {
+        if (! array_key_exists($tabName, self::RESERVATION_TABS)) {
+            return;
+        }
+
         $this->currentTab = $tabName;
+
+        // Ensure the table re-renders immediately for the new tab.
+        // Without this, wire:poll may be too slow and it can look like clicks do nothing.
+        $this->loadBookingsData();
     }
 
     /**
@@ -63,6 +78,7 @@ class ReservationsDesk extends Component
             ->get(['id', 'room_id', 'start_at', 'end_at']);
 
         $this->bookings = Booking::with(['user', 'room.roomType'])
+            ->where('status', $this->currentTab)
             ->get()
             ->sortBy('start_at')
             ->map(function ($booking) use ($approvedBookings) {
@@ -324,6 +340,83 @@ class ReservationsDesk extends Component
         $this->selectedBooking = null;
     }
 
+    private function sendableEmailForUser($user): ?string
+    {
+        if (!$user) {
+            return null;
+        }
+
+        try {
+            $rawEmail = $user->getRawOriginal('email') ?? $user->email ?? null;
+        } catch (\Throwable) {
+            $rawEmail = $user->email ?? null;
+        }
+
+        $email = $this->decryptEncryptedString(is_string($rawEmail) ? $rawEmail : null);
+
+        if (!$email && is_string($user->email ?? null)) {
+            $email = $user->email;
+        }
+
+        $email = is_string($email) ? trim($email) : null;
+
+        return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
+    }
+
+    private function decryptEncryptedString(?string $raw): ?string
+    {
+        if (empty($raw)) {
+            return null;
+        }
+
+        $aes = null;
+        try {
+            $aes = Aes256GcmEncrypter::fromConfiguration();
+        } catch (\Throwable) {
+            $aes = null;
+        }
+
+        if ($aes) {
+            $decodedEnvelope = @base64_decode($raw, true);
+            $envelope = $decodedEnvelope === false ? null : json_decode($decodedEnvelope, true);
+
+            if (is_array($envelope) && isset($envelope['iv'], $envelope['tag'], $envelope['value'])) {
+                try {
+                    $iv = base64_decode((string) $envelope['iv'], true);
+                    $tag = base64_decode((string) $envelope['tag'], true);
+                    $cipher = base64_decode((string) $envelope['value'], true);
+
+                    if ($iv !== false && $tag !== false && $cipher !== false) {
+                        $packedPayload = base64_encode($iv . $tag . $cipher);
+                        $decrypted = $aes->decrypt($packedPayload);
+
+                        if (is_string($decrypted) && $decrypted !== '' && $decrypted !== $packedPayload) {
+                            return $decrypted;
+                        }
+                    }
+                } catch (\Throwable) {
+                    // Fall through to the remaining decryption strategies.
+                }
+            }
+
+            try {
+                $decrypted = $aes->decrypt($raw);
+
+                if (is_string($decrypted) && $decrypted !== '' && $decrypted !== $raw) {
+                    return $decrypted;
+                }
+            } catch (\Throwable) {
+                // Fall through to Laravel Crypt compatibility.
+            }
+        }
+
+        try {
+            return \Illuminate\Support\Facades\Crypt::decryptString($raw);
+        } catch (\Throwable) {
+            return str_contains($raw, '@') ? $raw : null;
+        }
+    }
+
     /**
      * Approves a target booking reservation if slots are cleared
      */
@@ -351,16 +444,18 @@ class ReservationsDesk extends Component
         ]);
 
         // --- DIAGNOSTIC BREAKDOWN FOR TESTING ENVIRONMENT ---
+        $recipientEmail = $this->sendableEmailForUser($booking->user);
+
         if (!$booking->user) {
             Log::warning("Email Routing Skipped: Booking record ID {$bookingId} does not possess a linked User relation model profile.");
             $this->dispatch('notify', message: 'Confirmed! Note: No user profile linked to email.');
-        } elseif (empty($booking->user->email)) {
-            Log::warning("Email Routing Skipped: The linked User profile model matching Booking ID {$bookingId} contains an empty email data attribute.");
-            $this->dispatch('notify', message: 'Confirmed! Note: Target user email property is empty.');
+        } elseif (!$recipientEmail) {
+            Log::warning("Email Routing Skipped: Booking ID {$bookingId} has no decryptable RFC-compliant recipient email address.");
+            $this->dispatch('notify', message: 'Confirmed! Note: Target user email could not be decrypted.');
         } else {
-            Log::info("Mail Dispatch Handshake Initialized: Sending confirmation to customer path [{$booking->user->email}]");
+            Log::info("Mail Dispatch Handshake Initialized: Sending confirmation to customer path [{$recipientEmail}]");
             
-            Mail::to($booking->user->email)->send(new BookingStatusMail($booking, 'approved'));
+            Mail::to($recipientEmail)->send(new BookingStatusMail($booking, 'approved'));
             
             $this->dispatch('notify', message: 'Booking reservation confirmed and email sent successfully!');
         }
@@ -384,14 +479,16 @@ class ReservationsDesk extends Component
             ]);
 
             // --- DIAGNOSTIC BREAKDOWN FOR TESTING ENVIRONMENT ---
+            $recipientEmail = $this->sendableEmailForUser($booking->user);
+
             if (!$booking->user) {
                 Log::warning("Email Routing Skipped: Rejection ID {$bookingId} does not possess a linked User relation model profile.");
-            } elseif (empty($booking->user->email)) {
-                Log::warning("Email Routing Skipped: The linked User profile model matching Rejection ID {$bookingId} contains an empty email data attribute.");
+            } elseif (!$recipientEmail) {
+                Log::warning("Email Routing Skipped: Rejection ID {$bookingId} has no decryptable RFC-compliant recipient email address.");
             } else {
-                Log::info("Mail Dispatch Handshake Initialized: Sending cancellation notice to customer path [{$booking->user->email}]");
+                Log::info("Mail Dispatch Handshake Initialized: Sending cancellation notice to customer path [{$recipientEmail}]");
                 
-                Mail::to($booking->user->email)->send(new BookingStatusMail($booking, 'rejected'));
+                Mail::to($recipientEmail)->send(new BookingStatusMail($booking, 'rejected'));
             }
 
             $this->dispatch('notify', message: 'Reservation request rejected and notification email processed.');
@@ -494,6 +591,8 @@ class ReservationsDesk extends Component
 
     public function render(): View
     {
-        return view('reservation.index');
+        return view('reservation.index', [
+            'reservationTabs' => self::RESERVATION_TABS,
+        ]);
     }
 }

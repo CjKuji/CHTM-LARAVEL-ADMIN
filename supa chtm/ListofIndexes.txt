@@ -1,0 +1,128 @@
+[
+  {
+    "schemaname": "public",
+    "tablename": "amenities",
+    "indexname": "amenities_name_key",
+    "full_index_code": "CREATE UNIQUE INDEX amenities_name_key ON public.amenities USING btree (name)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "amenities",
+    "indexname": "amenities_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX amenities_pkey ON public.amenities USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "archived_bookings",
+    "indexname": "archived_bookings_email_hash_idx",
+    "full_index_code": "CREATE INDEX archived_bookings_email_hash_idx ON public.archived_bookings USING btree (guest_email_hash)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "archived_bookings",
+    "indexname": "archived_bookings_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX archived_bookings_pkey ON public.archived_bookings USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "archived_bookings",
+    "indexname": "idx_archived_bookings_room_type_id",
+    "full_index_code": "CREATE INDEX idx_archived_bookings_room_type_id ON public.archived_bookings USING btree (room_type_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "audit_logs",
+    "indexname": "audit_logs_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX audit_logs_pkey ON public.audit_logs USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "bookings",
+    "indexname": "bookings_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX bookings_pkey ON public.bookings USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "housekeeping_task_items",
+    "indexname": "housekeeping_task_items_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX housekeeping_task_items_pkey ON public.housekeeping_task_items USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "housekeeping_tasks",
+    "indexname": "housekeeping_tasks_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX housekeeping_tasks_pkey ON public.housekeeping_tasks USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "housekeeping_template_items",
+    "indexname": "housekeeping_template_items_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX housekeeping_template_items_pkey ON public.housekeeping_template_items USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "housekeeping_templates",
+    "indexname": "housekeeping_templates_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX housekeeping_templates_pkey ON public.housekeeping_templates USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "migrations",
+    "indexname": "migrations_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX migrations_pkey ON public.migrations USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "room_amenities",
+    "indexname": "room_amenities_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX room_amenities_pkey ON public.room_amenities USING btree (room_type_id, amenity_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "room_images",
+    "indexname": "room_images_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX room_images_pkey ON public.room_images USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "room_status_logs",
+    "indexname": "room_status_logs_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX room_status_logs_pkey ON public.room_status_logs USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "room_types",
+    "indexname": "room_types_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX room_types_pkey ON public.room_types USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "rooms",
+    "indexname": "rooms_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX rooms_pkey ON public.rooms USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "rooms",
+    "indexname": "rooms_room_number_key",
+    "full_index_code": "CREATE UNIQUE INDEX rooms_room_number_key ON public.rooms USING btree (room_number)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "settings",
+    "indexname": "settings_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX settings_pkey ON public.settings USING btree (key)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "users",
+    "indexname": "users_email_hash_idx",
+    "full_index_code": "CREATE INDEX users_email_hash_idx ON public.users USING btree (email_hash)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "users",
+    "indexname": "users_pkey",
+    "full_index_code": "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)"
+  }
+]

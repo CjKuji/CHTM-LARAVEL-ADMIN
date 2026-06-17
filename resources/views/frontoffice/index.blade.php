@@ -89,8 +89,8 @@
                                         <div class="font-medium text-gray-900 truncate" title="{{ $booking->user?->fullName() }}">
                                             {{ $booking->user?->fullName() ?? 'Unknown Guest' }}
                                         </div>
-                                        <div class="text-xs text-gray-500 truncate mt-0.5" title="{{ $booking->user?->email }}">
-                                            {{ $booking->user?->email ?? 'no-email@system' }}
+                                        <div class="text-xs text-gray-500 truncate mt-0.5">
+                                            <x-private-email :email="$booking->user?->email" fallback="no-email@system" />
                                         </div>
                                     </td>
 

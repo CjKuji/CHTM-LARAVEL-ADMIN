@@ -47,22 +47,12 @@
     {{-- Horizontal Tab Navigation Control Track --}}
     <div class="rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
         <div class="flex gap-1 overflow-x-auto pb-1 sm:pb-0">
-            <button type="button" wire:click="changeTab('pending')"
-                    class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer {{ $currentTab === 'pending' ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50' }}">
-                Pending Request
-            </button>
-            <button type="button" wire:click="changeTab('approved')"
-                    class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer {{ $currentTab === 'approved' ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50' }}">
-                Confirmed Matrix
-            </button>
-            <button type="button" wire:click="changeTab('checked_in')"
-                    class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer {{ $currentTab === 'checked_in' ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50' }}">
-                Checked In
-            </button>
-            <button type="button" wire:click="changeTab('checked_out')"
-                    class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer {{ $currentTab === 'checked_out' ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50' }}">
-                Archived History
-            </button>
+            @foreach($reservationTabs as $tabStatus => $tabLabel)
+                <button type="button" wire:click="changeTab('{{ $tabStatus }}')"
+                        class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer {{ $currentTab === $tabStatus ? 'bg-pink-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50' }}">
+                    {{ $tabLabel }}
+                </button>
+            @endforeach
         </div>
     </div>
 
@@ -93,7 +83,9 @@
                                     <div class="font-bold text-gray-900">
                                         {{ $bookingItem['user']['full_name'] ?? 'Unknown Guest' }}
                                     </div>
-                                    <div class="text-xs text-gray-400 font-medium mt-0.5">{{ $bookingItem['user']['email'] ?? 'no-email' }}</div>
+                                    <div class="text-xs text-gray-400 font-medium mt-0.5">
+                                        <x-private-email :email="$bookingItem['user']['email'] ?? null" fallback="no-email" />
+                                    </div>
                                     
                                     @if(($bookingItem['is_conflicted'] ?? false))
                                         <div class="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100/80 px-2 py-0.5 rounded-md mt-1.5 uppercase tracking-wide">
@@ -113,8 +105,10 @@
                                         @elseif(($bookingItem['status'] ?? '') === 'pending') bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20
                                         @elseif(($bookingItem['status'] ?? '') === 'approved') bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-700/20
                                         @elseif(($bookingItem['status'] ?? '') === 'checked_in') bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20
-                                        @elseif(($bookingItem['status'] ?? '') === 'checked_out') bg-gray-100 text-gray-600 ring-1 ring-inset ring-gray-500/10 @endif">
-                                        {{ ($bookingItem['is_conflicted'] ?? false) ? 'Conflicted' : str_replace('_', ' ', ($bookingItem['status'] ?? '')) }}
+                                        @elseif(($bookingItem['status'] ?? '') === 'checked_out') bg-gray-100 text-gray-600 ring-1 ring-inset ring-gray-500/10
+                                        @elseif(($bookingItem['status'] ?? '') === 'cancelled') bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-600/20
+                                        @elseif(($bookingItem['status'] ?? '') === 'rejected') bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20 @endif">
+                                        {{ ($bookingItem['is_conflicted'] ?? false) ? 'Conflicted' : ($reservationTabs[$bookingItem['status'] ?? ''] ?? str_replace('_', ' ', ($bookingItem['status'] ?? ''))) }}
                                     </span>
                                 </td>
                                 <td class="p-4 text-gray-900 font-bold">

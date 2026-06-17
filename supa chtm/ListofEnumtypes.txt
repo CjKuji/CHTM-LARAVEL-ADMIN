@@ -1,0 +1,176 @@
+[
+  {
+    "schema_name": "public",
+    "enum_type": "booking_status",
+    "sort_order": 1,
+    "enum_value": "pending"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "booking_status",
+    "sort_order": 2,
+    "enum_value": "approved"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "booking_status",
+    "sort_order": 3,
+    "enum_value": "cancelled"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "booking_status",
+    "sort_order": 4,
+    "enum_value": "checked_in"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "booking_status",
+    "sort_order": 5,
+    "enum_value": "checked_out"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "booking_status",
+    "sort_order": 6,
+    "enum_value": "rejected"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "booking_status",
+    "sort_order": 7,
+    "enum_value": "archived"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "housekeeping_status",
+    "sort_order": 1,
+    "enum_value": "pending"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "housekeeping_status",
+    "sort_order": 2,
+    "enum_value": "in_progress"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "housekeeping_status",
+    "sort_order": 3,
+    "enum_value": "completed"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "housekeeping_status",
+    "sort_order": 4,
+    "enum_value": "inspected"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "housekeeping_status",
+    "sort_order": 5,
+    "enum_value": "do_not_disturb"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "payment_status",
+    "sort_order": 1,
+    "enum_value": "pending"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "payment_status",
+    "sort_order": 2,
+    "enum_value": "paid"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "payment_status",
+    "sort_order": 3,
+    "enum_value": "failed"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "payment_status",
+    "sort_order": 4,
+    "enum_value": "refunded"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "room_status",
+    "sort_order": 1,
+    "enum_value": "available"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "room_status",
+    "sort_order": 2,
+    "enum_value": "occupied"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "room_status",
+    "sort_order": 3,
+    "enum_value": "needs_cleaning"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "room_status",
+    "sort_order": 4,
+    "enum_value": "cleaning"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "room_status",
+    "sort_order": 5,
+    "enum_value": "inspected"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "room_status",
+    "sort_order": 6,
+    "enum_value": "maintenance"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "room_status",
+    "sort_order": 7,
+    "enum_value": "do_not_disturb"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "user_role",
+    "sort_order": 1,
+    "enum_value": "user"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "user_role",
+    "sort_order": 1.5,
+    "enum_value": "super_admin"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "user_role",
+    "sort_order": 2,
+    "enum_value": "admin"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "user_role",
+    "sort_order": 3,
+    "enum_value": "reservation"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "user_role",
+    "sort_order": 4,
+    "enum_value": "frontoffice"
+  },
+  {
+    "schema_name": "public",
+    "enum_type": "user_role",
+    "sort_order": 5,
+    "enum_value": "housekeeper"
+  }
+]

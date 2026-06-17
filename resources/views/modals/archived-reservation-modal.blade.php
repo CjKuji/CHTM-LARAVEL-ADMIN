@@ -68,7 +68,10 @@
                     <div class="space-y-3 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
                         <h4 class="font-bold text-gray-800 uppercase tracking-wider text-xs text-pink-500">Guest & Ledger Registry</h4>
                         <p><strong>Full Name:</strong> {{ trim(($booking->guest_fname ?? '').' '.($booking->guest_lname ?? '')) ?: 'Archived Guest' }}</p>
-                        <p><strong>Email Address:</strong> {{ $booking->user->email ?? 'no-linked-account@system.internal' }}</p>
+                        <p>
+                            <strong>Email Address:</strong>
+                            <x-private-email :email="$booking->user->email ?? null" fallback="no-linked-account@system.internal" />
+                        </p>
                         <p><strong>Payment Method:</strong> <span class="uppercase font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{{ $booking->payment_method ?? 'N/A' }}</span></p>
                         <p><strong>Base Price:</strong> ₱{{ number_format((float) ($booking->room_base_price ?? 0), 2) }}</p>
                         <p><strong>Total Gross Amount:</strong> <span class="text-teal-600 font-bold">₱{{ number_format((float) ($booking->total_amount ?? 0), 2) }}</span></p>

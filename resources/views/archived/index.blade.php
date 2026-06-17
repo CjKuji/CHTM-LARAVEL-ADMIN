@@ -69,7 +69,7 @@
                                         {{ trim(($booking->guest_fname ?? '').' '.($booking->guest_lname ?? '')) ?: 'Archived Guest' }}
                                     </div>
                                     <div class="text-xs text-gray-400 font-medium mt-0.5">
-                                        {{ $booking->user->email ?? 'no-linked-email@system.internal' }}
+                                        <x-private-email :email="$booking->user->email ?? null" fallback="no-linked-email@system.internal" />
                                     </div>
                                 </td>
 

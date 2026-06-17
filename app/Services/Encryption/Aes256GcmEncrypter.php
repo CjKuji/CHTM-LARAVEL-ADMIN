@@ -109,6 +109,41 @@ final class Aes256GcmEncrypter
 
         $raw = base64_decode($payload, true);
 
+        if ($raw !== false) {
+            $envelope = json_decode($raw, true);
+
+            if (is_array($envelope) && isset($envelope['iv'], $envelope['tag'], $envelope['value'])) {
+                $iv = base64_decode((string) $envelope['iv'], true);
+                $tag = base64_decode((string) $envelope['tag'], true);
+                $ciphertext = base64_decode((string) $envelope['value'], true);
+
+                if ($iv !== false && $tag !== false && $ciphertext !== false) {
+                    $plaintext = openssl_decrypt(
+                        $ciphertext,
+                        self::CIPHER,
+                        $this->key,
+                        OPENSSL_RAW_DATA,
+                        $iv,
+                        $tag
+                    );
+
+                    if ($plaintext !== false) {
+                        return $plaintext;
+                    }
+                }
+            }
+        }
+
+        try {
+            $decrypted = \Illuminate\Support\Facades\Crypt::decryptString($payload);
+
+            if (is_string($decrypted) && $decrypted !== '') {
+                return $decrypted;
+            }
+        } catch (\Throwable) {
+            // Not a Laravel Crypt payload; continue through the AES-GCM handlers.
+        }
+
         // SAFE FALLBACK: If it's plain text or doesn't meet the binary length rules, 
         // treat it as unencrypted data and pass it through safely.
         if ($raw === false || strlen($raw) < (self::IV_LENGTH + self::TAG_LENGTH)) {

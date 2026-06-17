@@ -59,7 +59,7 @@
                 this.selectedMonth = parseInt(config.initialMonth);
                 this.selectedYear = parseInt(config.initialYear);
 
-                if (config.isLivewire) {
+                if (config.isLivewire && this.$wire) {
                     this.$watch('$wire.availability', (value) => {
                         this.availability = value;
                     });
@@ -132,7 +132,7 @@
     data-reservation-url="{{ route('reservation') }}"
     data-tab="{{ $tab ?? request('tab','pending') }}"
     x-data="roomAvailabilityCalendar({
-        availability: $wire.entangle('availability'),
+        availability: @js($availability),
         rooms: @js($calendarRooms),
         roomTypes: @js($cleanRoomTypes),
         initialMonth: @js($this->selectedMonth),
@@ -156,7 +156,7 @@
             {{-- FIXED: Added explicit x-model binding connection directly synchronized alongside Livewire mutation listeners --}}
             <select
                 x-model.number="selectedMonth"
-                @change="$wire.set('selectedMonth', selectedMonth)"
+                @change="typeof $wire !== 'undefined' && $wire.set('selectedMonth', selectedMonth)"
                 class="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2.5 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-teal-500 transition cursor-pointer"
             >
                 <template x-for="(label, index) in monthLabels" :key="index">
@@ -169,7 +169,7 @@
             <input
                 type="number"
                 x-model.number="selectedYear"
-                @input.debounce.500ms="$wire.set('selectedYear', selectedYear)"
+                @input.debounce.500ms="typeof $wire !== 'undefined' && $wire.set('selectedYear', selectedYear)"
                 class="w-32 rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2.5 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-teal-500 transition"
             >
         </div>

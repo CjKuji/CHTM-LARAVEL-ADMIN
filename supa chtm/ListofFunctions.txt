@@ -1,0 +1,602 @@
+[
+  {
+    "function_name": "apply_booking_checkin_checkout_window",
+    "arguments": "",
+    "return_type": "trigger",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.apply_booking_checkin_checkout_window()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  -- Force check-in time to 15:00 (3 PM) using the provided date portion\n  NEW.start_at := (NEW.start_at::date + time '15:00')::timestamp;\n\n  -- Force check-out time to 11:00 (11 AM) using the provided date portion\n  NEW.end_at := (NEW.end_at::date + time '11:00')::timestamp;\n\n  -- Safety: ensure end is after start; if not, bump checkout to next day at 11:00\n  if NEW.end_at <= NEW.start_at then\n    NEW.end_at := (NEW.start_at::date + interval '1 day' + time '11:00')::timestamp;\n  end if;\n\n  return NEW;\nend;\n$function$\n"
+  },
+  {
+    "function_name": "cash_dist",
+    "arguments": "money, money",
+    "return_type": "money",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.cash_dist(money, money)\n RETURNS money\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$cash_dist$function$\n"
+  },
+  {
+    "function_name": "date_dist",
+    "arguments": "date, date",
+    "return_type": "integer",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.date_dist(date, date)\n RETURNS integer\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$date_dist$function$\n"
+  },
+  {
+    "function_name": "encrypt_and_sync_user",
+    "arguments": "target_user_id uuid, plain_fname text, plain_lname text, plain_email text, target_role text",
+    "return_type": "text",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.encrypt_and_sync_user(target_user_id uuid, plain_fname text, plain_lname text, plain_email text, target_role text DEFAULT 'user'::text)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\r\nDECLARE\r\n    -- Pull your Laravel APP_KEY directly from this variable \r\n    raw_laravel_key CONSTANT TEXT := 'OdVOqiRWcJWLZAPDTXfAlOywbVQTYS9v0k1B5I7jG1w=';\r\n    \r\n    decoded_key BYTEA;\r\n    deterministic_hash TEXT;\r\n    enc_email TEXT;\r\n    enc_fname TEXT;\r\n    enc_lname TEXT;\r\n    \r\n    -- Dynamic Workspace variables\r\n    iv BYTEA;\r\n    raw_encrypted BYTEA;\r\n    auth_tag BYTEA;\r\n    ciphertext BYTEA;\r\nBEGIN\r\n    -- 1. Decode the master system key\r\n    decoded_key := decode(raw_laravel_key, 'base64');\r\n    \r\n    -- 2. Mock a standard 16-byte authentication tag block for structural padding consistency\r\n    auth_tag := decode('00000000000000000000000000000000', 'hex');\r\n\r\n    -- -------------------------------------------------------------------------\r\n    -- ENCRYPT EMAIL\r\n    -- -------------------------------------------------------------------------\r\n    iv := extensions.gen_random_bytes(12); -- Standard 12-byte IV for GCM framework alignment\r\n    -- Use the database-supported 'aes' cipher block chaining mode\r\n    ciphertext := extensions.encrypt_iv(plain_email::bytea, decoded_key, iv || decode('00000000', 'hex'), 'aes');\r\n    enc_email := encode(iv || auth_tag || ciphertext, 'base64');\r\n\r\n    -- -------------------------------------------------------------------------\r\n    -- ENCRYPT FIRST NAME\r\n    -- -------------------------------------------------------------------------\r\n    iv := extensions.gen_random_bytes(12);\r\n    ciphertext := extensions.encrypt_iv(plain_fname::bytea, decoded_key, iv || decode('00000000', 'hex'), 'aes');\r\n    enc_fname := encode(iv || auth_tag || ciphertext, 'base64');\r\n\r\n    -- -------------------------------------------------------------------------\r\n    -- ENCRYPT LAST NAME\r\n    -- -------------------------------------------------------------------------\r\n    iv := extensions.gen_random_bytes(12);\r\n    ciphertext := extensions.encrypt_iv(plain_lname::bytea, decoded_key, iv || decode('00000000', 'hex'), 'aes');\r\n    enc_lname := encode(iv || auth_tag || ciphertext, 'base64');\r\n\r\n    -- 3. Generate the deterministic index token (SHA256)\r\n    deterministic_hash := encode(extensions.digest(plain_email, 'sha256'), 'hex');\r\n\r\n    -- 4. Upsert cleanly into public.users\r\n    INSERT INTO public.users (id, fname, lname, email, email_hash, role, created_at)\r\n    VALUES (\r\n        target_user_id, \r\n        enc_fname, \r\n        enc_lname, \r\n        enc_email, \r\n        deterministic_hash, \r\n        target_role::user_role, \r\n        now()\r\n    )\r\n    ON CONFLICT (id) \r\n    DO UPDATE SET \r\n        fname      = EXCLUDED.fname,\r\n        lname      = EXCLUDED.lname,\r\n        email      = EXCLUDED.email,\r\n        email_hash = EXCLUDED.email_hash,\r\n        role       = EXCLUDED.role;\r\n\r\n    RETURN 'Success: Profile fields encrypted and synchronized for UUID ' || target_user_id::text;\r\nEXCEPTION WHEN OTHERS THEN\r\n    RETURN 'Error during execution: ' || SQLERRM;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "function_name": "float4_dist",
+    "arguments": "real, real",
+    "return_type": "real",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.float4_dist(real, real)\n RETURNS real\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$float4_dist$function$\n"
+  },
+  {
+    "function_name": "float8_dist",
+    "arguments": "double precision, double precision",
+    "return_type": "double precision",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.float8_dist(double precision, double precision)\n RETURNS double precision\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$float8_dist$function$\n"
+  },
+  {
+    "function_name": "gbt_bit_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bit_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bit_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_bit_consistent",
+    "arguments": "internal, bit, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bit_consistent(internal, bit, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bit_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_bit_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bit_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bit_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_bit_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bit_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bit_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_bit_same",
+    "arguments": "gbtreekey_var, gbtreekey_var, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bit_same(gbtreekey_var, gbtreekey_var, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bit_same$function$\n"
+  },
+  {
+    "function_name": "gbt_bit_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey_var",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bit_union(internal, internal)\n RETURNS gbtreekey_var\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bit_union$function$\n"
+  },
+  {
+    "function_name": "gbt_bool_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bool_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE STRICT\nAS '$libdir/btree_gist', $function$gbt_bool_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_bool_consistent",
+    "arguments": "internal, boolean, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bool_consistent(internal, boolean, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE STRICT\nAS '$libdir/btree_gist', $function$gbt_bool_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_bool_fetch",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bool_fetch(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE STRICT\nAS '$libdir/btree_gist', $function$gbt_bool_fetch$function$\n"
+  },
+  {
+    "function_name": "gbt_bool_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bool_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE STRICT\nAS '$libdir/btree_gist', $function$gbt_bool_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_bool_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bool_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE STRICT\nAS '$libdir/btree_gist', $function$gbt_bool_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_bool_same",
+    "arguments": "gbtreekey2, gbtreekey2, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bool_same(gbtreekey2, gbtreekey2, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE STRICT\nAS '$libdir/btree_gist', $function$gbt_bool_same$function$\n"
+  },
+  {
+    "function_name": "gbt_bool_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey2",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bool_union(internal, internal)\n RETURNS gbtreekey2\n LANGUAGE c\n IMMUTABLE STRICT\nAS '$libdir/btree_gist', $function$gbt_bool_union$function$\n"
+  },
+  {
+    "function_name": "gbt_bpchar_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bpchar_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bpchar_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_bpchar_consistent",
+    "arguments": "internal, character, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bpchar_consistent(internal, character, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bpchar_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_bytea_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bytea_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bytea_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_bytea_consistent",
+    "arguments": "internal, bytea, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bytea_consistent(internal, bytea, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bytea_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_bytea_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bytea_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bytea_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_bytea_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bytea_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bytea_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_bytea_same",
+    "arguments": "gbtreekey_var, gbtreekey_var, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bytea_same(gbtreekey_var, gbtreekey_var, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bytea_same$function$\n"
+  },
+  {
+    "function_name": "gbt_bytea_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey_var",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_bytea_union(internal, internal)\n RETURNS gbtreekey_var\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_bytea_union$function$\n"
+  },
+  {
+    "function_name": "gbt_cash_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_cash_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_cash_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_cash_consistent",
+    "arguments": "internal, money, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_cash_consistent(internal, money, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_cash_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_cash_distance",
+    "arguments": "internal, money, smallint, oid, internal",
+    "return_type": "double precision",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_cash_distance(internal, money, smallint, oid, internal)\n RETURNS double precision\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_cash_distance$function$\n"
+  },
+  {
+    "function_name": "gbt_cash_fetch",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_cash_fetch(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_cash_fetch$function$\n"
+  },
+  {
+    "function_name": "gbt_cash_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_cash_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_cash_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_cash_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_cash_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_cash_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_cash_same",
+    "arguments": "gbtreekey16, gbtreekey16, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_cash_same(gbtreekey16, gbtreekey16, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_cash_same$function$\n"
+  },
+  {
+    "function_name": "gbt_cash_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey16",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_cash_union(internal, internal)\n RETURNS gbtreekey16\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_cash_union$function$\n"
+  },
+  {
+    "function_name": "gbt_date_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_date_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_date_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_date_consistent",
+    "arguments": "internal, date, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_date_consistent(internal, date, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_date_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_date_distance",
+    "arguments": "internal, date, smallint, oid, internal",
+    "return_type": "double precision",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_date_distance(internal, date, smallint, oid, internal)\n RETURNS double precision\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_date_distance$function$\n"
+  },
+  {
+    "function_name": "gbt_date_fetch",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_date_fetch(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_date_fetch$function$\n"
+  },
+  {
+    "function_name": "gbt_date_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_date_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_date_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_date_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_date_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_date_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_date_same",
+    "arguments": "gbtreekey8, gbtreekey8, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_date_same(gbtreekey8, gbtreekey8, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_date_same$function$\n"
+  },
+  {
+    "function_name": "gbt_date_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey8",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_date_union(internal, internal)\n RETURNS gbtreekey8\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_date_union$function$\n"
+  },
+  {
+    "function_name": "gbt_decompress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_decompress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_decompress$function$\n"
+  },
+  {
+    "function_name": "gbt_enum_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_enum_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_enum_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_enum_consistent",
+    "arguments": "internal, anyenum, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_enum_consistent(internal, anyenum, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_enum_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_enum_fetch",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_enum_fetch(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_enum_fetch$function$\n"
+  },
+  {
+    "function_name": "gbt_enum_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_enum_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_enum_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_enum_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_enum_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_enum_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_enum_same",
+    "arguments": "gbtreekey8, gbtreekey8, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_enum_same(gbtreekey8, gbtreekey8, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_enum_same$function$\n"
+  },
+  {
+    "function_name": "gbt_enum_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey8",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_enum_union(internal, internal)\n RETURNS gbtreekey8\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_enum_union$function$\n"
+  },
+  {
+    "function_name": "gbt_float4_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float4_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float4_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_float4_consistent",
+    "arguments": "internal, real, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float4_consistent(internal, real, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float4_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_float4_distance",
+    "arguments": "internal, real, smallint, oid, internal",
+    "return_type": "double precision",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float4_distance(internal, real, smallint, oid, internal)\n RETURNS double precision\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float4_distance$function$\n"
+  },
+  {
+    "function_name": "gbt_float4_fetch",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float4_fetch(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float4_fetch$function$\n"
+  },
+  {
+    "function_name": "gbt_float4_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float4_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float4_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_float4_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float4_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float4_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_float4_same",
+    "arguments": "gbtreekey8, gbtreekey8, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float4_same(gbtreekey8, gbtreekey8, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float4_same$function$\n"
+  },
+  {
+    "function_name": "gbt_float4_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey8",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float4_union(internal, internal)\n RETURNS gbtreekey8\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float4_union$function$\n"
+  },
+  {
+    "function_name": "gbt_float8_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float8_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float8_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_float8_consistent",
+    "arguments": "internal, double precision, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float8_consistent(internal, double precision, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float8_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_float8_distance",
+    "arguments": "internal, double precision, smallint, oid, internal",
+    "return_type": "double precision",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float8_distance(internal, double precision, smallint, oid, internal)\n RETURNS double precision\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float8_distance$function$\n"
+  },
+  {
+    "function_name": "gbt_float8_fetch",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float8_fetch(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float8_fetch$function$\n"
+  },
+  {
+    "function_name": "gbt_float8_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float8_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float8_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_float8_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float8_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float8_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_float8_same",
+    "arguments": "gbtreekey16, gbtreekey16, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float8_same(gbtreekey16, gbtreekey16, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float8_same$function$\n"
+  },
+  {
+    "function_name": "gbt_float8_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey16",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_float8_union(internal, internal)\n RETURNS gbtreekey16\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_float8_union$function$\n"
+  },
+  {
+    "function_name": "gbt_inet_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_inet_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_inet_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_inet_consistent",
+    "arguments": "internal, inet, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_inet_consistent(internal, inet, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_inet_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_inet_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_inet_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_inet_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_inet_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_inet_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_inet_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_inet_same",
+    "arguments": "gbtreekey16, gbtreekey16, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_inet_same(gbtreekey16, gbtreekey16, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_inet_same$function$\n"
+  },
+  {
+    "function_name": "gbt_inet_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey16",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_inet_union(internal, internal)\n RETURNS gbtreekey16\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_inet_union$function$\n"
+  },
+  {
+    "function_name": "gbt_int2_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int2_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int2_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_int2_consistent",
+    "arguments": "internal, smallint, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int2_consistent(internal, smallint, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int2_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_int2_distance",
+    "arguments": "internal, smallint, smallint, oid, internal",
+    "return_type": "double precision",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int2_distance(internal, smallint, smallint, oid, internal)\n RETURNS double precision\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int2_distance$function$\n"
+  },
+  {
+    "function_name": "gbt_int2_fetch",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int2_fetch(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int2_fetch$function$\n"
+  },
+  {
+    "function_name": "gbt_int2_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int2_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int2_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_int2_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int2_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int2_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_int2_same",
+    "arguments": "gbtreekey4, gbtreekey4, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int2_same(gbtreekey4, gbtreekey4, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int2_same$function$\n"
+  },
+  {
+    "function_name": "gbt_int2_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey4",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int2_union(internal, internal)\n RETURNS gbtreekey4\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int2_union$function$\n"
+  },
+  {
+    "function_name": "gbt_int4_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int4_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int4_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_int4_consistent",
+    "arguments": "internal, integer, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int4_consistent(internal, integer, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int4_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_int4_distance",
+    "arguments": "internal, integer, smallint, oid, internal",
+    "return_type": "double precision",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int4_distance(internal, integer, smallint, oid, internal)\n RETURNS double precision\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int4_distance$function$\n"
+  },
+  {
+    "function_name": "gbt_int4_fetch",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int4_fetch(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int4_fetch$function$\n"
+  },
+  {
+    "function_name": "gbt_int4_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int4_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int4_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_int4_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int4_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int4_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_int4_same",
+    "arguments": "gbtreekey8, gbtreekey8, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int4_same(gbtreekey8, gbtreekey8, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int4_same$function$\n"
+  },
+  {
+    "function_name": "gbt_int4_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey8",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int4_union(internal, internal)\n RETURNS gbtreekey8\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int4_union$function$\n"
+  },
+  {
+    "function_name": "gbt_int8_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int8_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int8_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_int8_consistent",
+    "arguments": "internal, bigint, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int8_consistent(internal, bigint, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int8_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_int8_distance",
+    "arguments": "internal, bigint, smallint, oid, internal",
+    "return_type": "double precision",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int8_distance(internal, bigint, smallint, oid, internal)\n RETURNS double precision\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int8_distance$function$\n"
+  },
+  {
+    "function_name": "gbt_int8_fetch",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int8_fetch(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int8_fetch$function$\n"
+  },
+  {
+    "function_name": "gbt_int8_penalty",
+    "arguments": "internal, internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int8_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int8_penalty$function$\n"
+  },
+  {
+    "function_name": "gbt_int8_picksplit",
+    "arguments": "internal, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int8_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int8_picksplit$function$\n"
+  },
+  {
+    "function_name": "gbt_int8_same",
+    "arguments": "gbtreekey16, gbtreekey16, internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int8_same(gbtreekey16, gbtreekey16, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int8_same$function$\n"
+  },
+  {
+    "function_name": "gbt_int8_union",
+    "arguments": "internal, internal",
+    "return_type": "gbtreekey16",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_int8_union(internal, internal)\n RETURNS gbtreekey16\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_int8_union$function$\n"
+  },
+  {
+    "function_name": "gbt_intv_compress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_intv_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_intv_compress$function$\n"
+  },
+  {
+    "function_name": "gbt_intv_consistent",
+    "arguments": "internal, interval, smallint, oid, internal",
+    "return_type": "boolean",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_intv_consistent(internal, interval, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_intv_consistent$function$\n"
+  },
+  {
+    "function_name": "gbt_intv_decompress",
+    "arguments": "internal",
+    "return_type": "internal",
+    "full_function_code": "CREATE OR REPLACE FUNCTION public.gbt_intv_decompress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/btree_gist', $function$gbt_intv_decompress$function$\n"
+  }
+]

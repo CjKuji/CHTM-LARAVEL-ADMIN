@@ -54,7 +54,9 @@
                 </div>
                 <div class="min-w-0">
                     <p class="truncate text-sm font-bold text-gray-900">{{ $userName }}</p>
-                    <p class="truncate text-xs text-gray-500 font-medium">{{ $userEmail }}</p>
+                    <p class="truncate text-xs text-gray-500 font-medium">
+                        <x-private-email :email="$userEmail" fallback="no-email" />
+                    </p>
                     <div class="mt-1 flex items-center gap-1">
                         <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>
                         <span class="text-[10px] font-bold text-green-600 uppercase tracking-wide">Verified Desk Profile</span>
@@ -78,7 +80,7 @@
             </div>
 
             <div class="border-t border-gray-100 bg-gray-50 px-4 py-2.5 text-[11px] text-gray-400 font-medium truncate">
-                Signed in as {{ $userEmail }}
+                <span>Signed in as </span><x-private-email :email="$userEmail" fallback="no-email" />
             </div>
         </div>
     </div>
