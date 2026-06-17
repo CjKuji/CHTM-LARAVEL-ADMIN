@@ -89,9 +89,11 @@
                                         <div class="font-medium text-gray-900 truncate" title="{{ $booking->user?->fullName() }}">
                                             {{ $booking->user?->fullName() ?? 'Unknown Guest' }}
                                         </div>
+                                        {{-- Email temporarily hidden 
                                         <div class="text-xs text-gray-500 truncate mt-0.5">
                                             <x-private-email :email="$booking->user?->email" fallback="no-email@system" />
                                         </div>
+                                        --}}
                                     </td>
 
                                     {{-- Room Column --}}
@@ -176,15 +178,6 @@
                                    class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-pink-500 focus:bg-white focus:ring-2 focus:ring-pink-500/20"
                                    required>
                         </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Email</label>
-                            <input type="email" name="guest_email"
-                                   value="{{ old('guest_email', $selected->user?->email) }}"
-                                   class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-pink-500 focus:bg-white focus:ring-2 focus:ring-pink-500/20"
-                                   required>
-                        </div>
-
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Start</label>

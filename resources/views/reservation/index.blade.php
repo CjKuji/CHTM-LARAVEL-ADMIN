@@ -83,9 +83,10 @@
                                     <div class="font-bold text-gray-900">
                                         {{ $bookingItem['user']['full_name'] ?? 'Unknown Guest' }}
                                     </div>
-                                    <div class="text-xs text-gray-400 font-medium mt-0.5">
+                                    {{-- Email temporarily hidden --}}
+                                    {{-- <div class="text-xs text-gray-400 font-medium mt-0.5">
                                         <x-private-email :email="$bookingItem['user']['email'] ?? null" fallback="no-email" />
-                                    </div>
+                                    </div> --}}
                                     
                                     @if(($bookingItem['is_conflicted'] ?? false))
                                         <div class="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100/80 px-2 py-0.5 rounded-md mt-1.5 uppercase tracking-wide">

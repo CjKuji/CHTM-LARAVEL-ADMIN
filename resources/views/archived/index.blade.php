@@ -68,9 +68,11 @@
                                     <div class="font-bold text-gray-900">
                                         {{ trim(($booking->guest_fname ?? '').' '.($booking->guest_lname ?? '')) ?: 'Archived Guest' }}
                                     </div>
+                                    {{-- Email temporarily hidden 
                                     <div class="text-xs text-gray-400 font-medium mt-0.5">
                                         <x-private-email :email="$booking->user->email ?? null" fallback="no-linked-email@system.internal" />
-                                    </div>
+                                    </div> 
+                                    --}}
                                 </td>
 
                                 {{-- Room Placement Architecture Data Fields --}}
@@ -107,12 +109,12 @@
                                 <td class="p-4 text-center">
                                     <div class="flex items-center justify-center gap-2">
                                         <button 
-    type="button" 
-    @click="$dispatch('open-archive-modal'); $dispatch('view-archive-details', { id: {{ $booking->id }} })"
-    class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-700 transition active:scale-95 cursor-pointer"
->
-    View Details
-</button>
+                                            type="button" 
+                                            @click="$dispatch('open-archive-modal'); $dispatch('view-archive-details', { id: {{ $booking->id }} })"
+                                            class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-700 transition active:scale-95 cursor-pointer"
+                                        >
+                                            View Details
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
