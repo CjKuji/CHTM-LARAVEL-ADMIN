@@ -65,7 +65,6 @@ class ReservationsDesk extends Component
         $this->currentTab = $tabName;
 
         // Ensure the table re-renders immediately for the new tab.
-        // Without this, wire:poll may be too slow and it can look like clicks do nothing.
         $this->loadBookingsData();
     }
 
@@ -77,140 +76,33 @@ class ReservationsDesk extends Component
         $approvedBookings = Booking::whereIn('status', ['approved', 'checked_in'])
             ->get(['id', 'room_id', 'start_at', 'end_at']);
 
+        $placeholder = 'Encrypted (AES-256-GCM)';
+
         $this->bookings = Booking::with(['user', 'room.roomType'])
             ->where('status', $this->currentTab)
             ->get()
             ->sortBy('start_at')
-            ->map(function ($booking) use ($approvedBookings) {
+            ->map(function ($booking) use ($approvedBookings, $placeholder) {
                 $userData = null;
 
-                // prepare Aes256Gcm encrypter
-                $aes = null;
-                try {
-                    $aes = Aes256GcmEncrypter::fromConfiguration();
-                } catch (\Throwable $e) {
-                    $aes = null;
-                }
-
-                // Robust decrypt attempt using the project's AES-256-GCM encrypter first.
-                // Handles both:
-                //  - base64(iv|tag|ciphertext)
-                //  - base64(json{iv,tag,value}) where iv/tag/value are themselves base64
-                $attemptDecrypt = function (?string $raw) use ($aes) {
-                    if (empty($raw) || !is_string($raw)) {
-                        return null;
-                    }
-
-                    // Helper: decrypt Laravel-style envelope if present
-                    $tryDecryptLaravelEnvelope = function (string $payload) use ($aes) : ?string {
-                        // Payload itself is base64-encoded JSON
-                        $maybeDecoded = @base64_decode($payload, true);
-                        if ($maybeDecoded === false) {
-                            return null;
-                        }
-
-                        $maybeJson = json_decode($maybeDecoded, true);
-                        if (!is_array($maybeJson)) {
-                            return null;
-                        }
-
-                        // Case A: json contains iv/tag/value (all base64). Our encrypter expects base64(iv|tag|ciphertext)
-                        if (isset($maybeJson['iv'], $maybeJson['tag'], $maybeJson['value']) && $aes) {
-                            try {
-                                $iv = base64_decode((string)$maybeJson['iv'], true);
-                                $tag = base64_decode((string)$maybeJson['tag'], true);
-                                $cipher = base64_decode((string)$maybeJson['value'], true);
-
-                                if ($iv === false || $tag === false || $cipher === false) {
-                                    return null;
-                                }
-
-                                // Our encrypter expects base64(iv|tag|ciphertext)
-                                $packed = $iv . $tag . $cipher; // binary
-                                $reencoded = base64_encode($packed);
-
-                                $out = $aes->decrypt($reencoded);
-                                if ($out !== null && $out !== '' && $out !== $reencoded) {
-                                    return $out;
-                                }
-
-                                // If auth failed, decrypt() returns original payload; ignore here
-                                return null;
-                            } catch (\Throwable) {
-                                return null;
-                            }
-                        }
-
-                        // Case B (less common): json contains value that is itself a payload
-                        if (isset($maybeJson['value']) && is_string($maybeJson['value']) && $aes) {
-                            $candidate = $maybeJson['value'];
-                            try {
-                                $out = $aes->decrypt($candidate);
-                                if ($out !== null && $out !== '' && $out !== $candidate) {
-                                    return $out;
-                                }
-                            } catch (\Throwable) {
-                                return null;
-                            }
-                        }
-
-                        return null;
-                    };
-
-                    // 1) Try Laravel envelope first (this matches your DB examples)
-                    if ($aes) {
-                        $out = $tryDecryptLaravelEnvelope($raw);
-                        if ($out !== null) {
-                            return $out;
-                        }
-                    }
-
-                    // 2) Try AES encrypter on raw payload (base64(iv|tag|ciphertext))
-                    if ($aes) {
-                        try {
-                            $out = $aes->decrypt($raw);
-                            if ($out !== null && $out !== '' && $out !== $raw) {
-                                return $out;
-                            }
-                        } catch (\Throwable) {}
-
-                        // try decode-then-decode again (some payloads are double-encoded)
-                        $decodedRaw = @base64_decode($raw, true);
-                        if ($decodedRaw !== false) {
-                            try {
-                                $out2 = $aes->decrypt(base64_encode($decodedRaw));
-                                if ($out2 !== null && $out2 !== '' && $out2 !== $raw) {
-                                    return $out2;
-                                }
-                            } catch (\Throwable) {}
-                        }
-                    }
-
-                    // 3) Fallback to Laravel Crypt facade
-                    try {
-                        return \Illuminate\Support\Facades\Crypt::decryptString($raw);
-                    } catch (\Throwable) {}
-
-                    return null;
-                };
-
                 if ($booking->user) {
+                    // Pull decrypted email natively using custom cast getters
                     try {
+                        $decryptedEmail = $booking->user->email;
+                    } catch (\Throwable $e) {
+                        $decryptedEmail = $placeholder;
+                    }
+
+                    if (empty($decryptedEmail) || !str_contains($decryptedEmail, '@')) {
+                        // Fallback attempt via the local decryption engine wrapper if model fails
                         $rawEmail = $booking->user->getRawOriginal('email') ?? $booking->user->email ?? null;
-                    } catch (\Throwable) {
-                        $rawEmail = $booking->user->email ?? null;
+                        $decryptedEmail = $this->decryptEncryptedString(is_string($rawEmail) ? $rawEmail : null) ?? $placeholder;
                     }
 
-                    $decryptedEmail = $attemptDecrypt($rawEmail);
-
-                    // If decryption failed, but raw looks like plain email, use it; otherwise placeholder
-                    if ($decryptedEmail === null) {
-                        $decryptedEmail = is_string($rawEmail) && strpos($rawEmail, '@') !== false ? $rawEmail : 'Encrypted (AES-256-GCM)';
-                    }
-
+                    // FIXED: Invokes the dynamic decrypted model accessor format seamlessly
                     $userData = [
                         'id'        => (string) $booking->user->getKey(),
-                        'full_name' => $booking->user->fullName(),
+                        'full_name' => $booking->user->full_name ?? $booking->user->fullName() ?? 'Unknown Guest',
                         'email'     => $decryptedEmail,
                     ];
                 }
@@ -231,26 +123,18 @@ class ReservationsDesk extends Component
                     });
                 }
 
-                $placeholder = 'Encrypted (AES-256-GCM)';
-
                 $safe = function (string $attr, $default = null) use ($booking, $placeholder) {
                     try {
                         $val = $booking->{$attr};
                         return $val === null ? $default : $val;
-                    } catch (\Throwable) {
+                    } catch (\Throwable $e) {
                         return $placeholder;
                     }
                 };
 
-                // Decrypt numeric fields: prefer raw DB value to avoid casts, then attempt decrypt
-                $decryptNumeric = function (string $attr, $default = null) use ($booking, $attemptDecrypt, $placeholder) {
+                $decryptNumeric = function (string $attr, $default = null) use ($booking, $placeholder) {
                     try {
-                        $raw = null;
-                        try {
-                            $raw = $booking->getRawOriginal($attr);
-                        } catch (\Throwable) {
-                            $raw = $booking->{$attr} ?? null;
-                        }
+                        $raw = $booking->getRawOriginal($attr) ?? $booking->{$attr} ?? null;
 
                         if ($raw === null) {
                             return $default;
@@ -261,7 +145,7 @@ class ReservationsDesk extends Component
                         }
 
                         if (is_string($raw) && $raw !== '') {
-                            $dec = $attemptDecrypt($raw);
+                            $dec = $this->decryptEncryptedString($raw);
                             if ($dec === null) {
                                 return $placeholder;
                             }
@@ -272,7 +156,7 @@ class ReservationsDesk extends Component
                         }
 
                         return $default;
-                    } catch (\Throwable) {
+                    } catch (\Throwable $e) {
                         return $placeholder;
                     }
                 };
@@ -299,9 +183,10 @@ class ReservationsDesk extends Component
                     'room'               => $booking->room ? $booking->room->toArray() : null,
                     'is_conflicted'      => $isConflicted,
                 ];
-            })
-            ->values()
-            ->toArray();
+            }
+        )
+        ->values()
+        ->toArray();
     }
 
     /**
@@ -319,7 +204,8 @@ class ReservationsDesk extends Component
                 return [
                     'room_id'   => $booking->room_id,
                     'status'    => $booking->status, 
-                    'user_name' => $booking->user ? $booking->user->fullName() : 'Unknown Guest',
+                    // FIXED: Resolves decrypted presentation name instead of throwing error/encryption strings
+                    'user_name' => $booking->user ? ($booking->user->full_name ?? $booking->user->fullName()) : 'Unknown Guest',
                     'start'     => $booking->start_at ? Carbon::parse($booking->start_at)->toDateString() : null, 
                     'end'       => $booking->end_at ? Carbon::parse($booking->end_at)->toDateString() : null,   
                 ];
@@ -348,7 +234,7 @@ class ReservationsDesk extends Component
 
         try {
             $rawEmail = $user->getRawOriginal('email') ?? $user->email ?? null;
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             $rawEmail = $user->email ?? null;
         }
 
@@ -372,7 +258,7 @@ class ReservationsDesk extends Component
         $aes = null;
         try {
             $aes = Aes256GcmEncrypter::fromConfiguration();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             $aes = null;
         }
 
@@ -394,9 +280,7 @@ class ReservationsDesk extends Component
                             return $decrypted;
                         }
                     }
-                } catch (\Throwable) {
-                    // Fall through to the remaining decryption strategies.
-                }
+                } catch (\Throwable $e) {}
             }
 
             try {
@@ -405,25 +289,22 @@ class ReservationsDesk extends Component
                 if (is_string($decrypted) && $decrypted !== '' && $decrypted !== $raw) {
                     return $decrypted;
                 }
-            } catch (\Throwable) {
-                // Fall through to Laravel Crypt compatibility.
-            }
+            } catch (\Throwable $e) {}
         }
 
         try {
             return \Illuminate\Support\Facades\Crypt::decryptString($raw);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             return str_contains($raw, '@') ? $raw : null;
         }
     }
 
     /**
-     * Approves a target booking reservation if slots are cleared
+     * Approves a targeted booking reservation if slots are cleared
      */
     #[On('executeApprove')]
     public function approveBooking(int $bookingId): void
     {
-        // Eager load relations so that they are instantly available inside the email payload
         $booking = Booking::with(['user', 'room.roomType'])->find($bookingId);
         if (!$booking) return;
 
@@ -443,20 +324,17 @@ class ReservationsDesk extends Component
             'approved_by' => Auth::id() ? (string) Auth::id() : null,
         ]);
 
-        // --- DIAGNOSTIC BREAKDOWN FOR TESTING ENVIRONMENT ---
         $recipientEmail = $this->sendableEmailForUser($booking->user);
 
         if (!$booking->user) {
-            Log::warning("Email Routing Skipped: Booking record ID {$bookingId} does not possess a linked User relation model profile.");
-            $this->dispatch('notify', message: 'Confirmed! Note: No user profile linked to email.');
+            Log::warning("Email Routing Skipped: Booking record ID {$bookingId} does not possess a linked User relation.");
+            $this->dispatch('notify', message: 'Confirmed! Note: No user profile linked.');
         } elseif (!$recipientEmail) {
-            Log::warning("Email Routing Skipped: Booking ID {$bookingId} has no decryptable RFC-compliant recipient email address.");
-            $this->dispatch('notify', message: 'Confirmed! Note: Target user email could not be decrypted.');
+            Log::warning("Email Routing Skipped: Booking ID {$bookingId} has no valid recipient email.");
+            $this->dispatch('notify', message: 'Confirmed! Note: Email cannot be verified.');
         } else {
-            Log::info("Mail Dispatch Handshake Initialized: Sending confirmation to customer path [{$recipientEmail}]");
-            
+            Log::info("Mail Dispatch Initialized: Sending confirmation to [{$recipientEmail}]");
             Mail::to($recipientEmail)->send(new BookingStatusMail($booking, 'approved'));
-            
             $this->dispatch('notify', message: 'Booking reservation confirmed and email sent successfully!');
         }
 
@@ -469,7 +347,6 @@ class ReservationsDesk extends Component
     #[On('executeReject')]
     public function rejectBooking(int $bookingId): void
     {
-        // Eager load customer data to target dispatch delivery parameters
         $booking = Booking::with(['user'])->find($bookingId);
         
         if ($booking) {
@@ -478,16 +355,14 @@ class ReservationsDesk extends Component
                 'rejected_by' => Auth::id() ? (string) Auth::id() : null,
             ]);
 
-            // --- DIAGNOSTIC BREAKDOWN FOR TESTING ENVIRONMENT ---
             $recipientEmail = $this->sendableEmailForUser($booking->user);
 
             if (!$booking->user) {
-                Log::warning("Email Routing Skipped: Rejection ID {$bookingId} does not possess a linked User relation model profile.");
+                Log::warning("Email Routing Skipped: Rejection ID {$bookingId} has no linked User.");
             } elseif (!$recipientEmail) {
-                Log::warning("Email Routing Skipped: Rejection ID {$bookingId} has no decryptable RFC-compliant recipient email address.");
+                Log::warning("Email Routing Skipped: Rejection ID {$bookingId} has no valid email.");
             } else {
-                Log::info("Mail Dispatch Handshake Initialized: Sending cancellation notice to customer path [{$recipientEmail}]");
-                
+                Log::info("Mail Dispatch Initialized: Sending cancellation notice to [{$recipientEmail}]");
                 Mail::to($recipientEmail)->send(new BookingStatusMail($booking, 'rejected'));
             }
 
@@ -516,7 +391,7 @@ class ReservationsDesk extends Component
         }
     }
 
-   /**
+    /**
      * Transitions active room configurations safely over to historical archive logs
      */
     #[On('executeCheckOut')]
@@ -571,16 +446,21 @@ class ReservationsDesk extends Component
                 'checked_out_at' => $now,
                 'checked_out_by' => $authUserId,
             ]);
-        }); 
+        });
 
         $this->dispatch('notify', message: 'Guest checked out successfully and stay details archived.');
         $this->refreshComponentState();
     }
 
     /**
-     * Refreshes internal engine state parameters and updates child layout systems
+     * ⚡ EVENT-DRIVEN LISTENERS:
+     * Listens exclusively to backend Echo WebSocket channels.
+     * This component will now run refreshComponentState ONLY when 
+     * a reservation channel event broadcasts an upgrade!
      */
-    private function refreshComponentState(): void
+    #[On('echo:reservations-desk,.BookingUpdated')]
+    #[On('echo:reservations-desk,.BookingCreated')]
+    public function refreshComponentState(): void
     {
         $this->loadBookingsData();
         $this->loadCalendarData();

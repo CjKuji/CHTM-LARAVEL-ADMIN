@@ -2,7 +2,8 @@
     use App\Support\DashboardPresenter;
 
     $authUser = auth()->user();
-    $userName = $authUser?->fullName() ?? 'Guest';
+    // FIXED: Swapped the undefined method fullName() for the matching full_name attribute property
+    $userName = $authUser?->full_name ?? 'Guest';
     $userEmail = $authUser?->email ?? '';
     $initials = mb_strtoupper(mb_substr(collect(explode(' ', $userName))->filter()->map(fn ($p) => mb_substr($p, 0, 1))->join(''), 0, 2));
     $roleLabel = DashboardPresenter::roleLabel($authUser?->role ?? 'user');

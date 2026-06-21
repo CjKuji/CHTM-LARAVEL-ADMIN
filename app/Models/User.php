@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Casts\Aes256GcmEncrypted;
 use App\Enums\UserRole;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -56,6 +57,16 @@ class User extends Authenticatable
     ];
 
     /**
+     * The accessors to append to the model's array form.
+     * This forces Livewire's serialization to include the decrypted value automatically.
+     *
+     * @var array<int, string>
+     */
+    protected $appends = [
+        'full_name',
+    ];
+
+    /**
      * The "booted" method of the model.
      * Automates fallback hashing checks on mutations.
      */
@@ -93,11 +104,20 @@ class User extends Authenticatable
     }
 
     /**
-     * Returns the formatted presentation name configuration layout.
+     * Accessor that automatically intercepts, handles, maps, and returns the 
+     * decrypted presenting name sequence configuration layout.
      */
-    public function fullName(): string
+    protected function fullName(): Attribute
     {
-        return trim(($this->fname ?? '').' '.($this->lname ?? '')) ?: 'Unknown';
+        return Attribute::make(
+            get: function () {
+                // Accessing properties via $this handles decryption using your custom Cast class
+                $firstName = $this->fname ?? '';
+                $lastName = $this->lname ?? '';
+
+                return trim($firstName . ' ' . $lastName) ?: 'Unknown';
+            }
+        );
     }
 
     /**

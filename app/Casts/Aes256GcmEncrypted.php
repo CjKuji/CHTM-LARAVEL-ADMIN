@@ -23,19 +23,27 @@ class Aes256GcmEncrypted implements CastsAttributes
     /**
      * @return array<string, string|null>
      */
-    public function set(Model $model, string $key, mixed $value, array $attributes): array
-    {
-        if ($value === null || $value === '') {
-            return [$key => null];
-        }
+   // Inside App\Casts\Aes256GcmEncrypted.php
 
-        // Defensive guard: if string payload is already packed as a base64 encryption string, return it as-is
-        if (str_contains((string)$value, '==')) {
-            return [$key => (string)$value];
-        }
-
-        $encrypted = Aes256GcmEncrypter::fromConfiguration()->encrypt((string) $value);
-
-        return [$key => $encrypted];
+public function set(Model $model, string $key, mixed $value, array $attributes): array
+{
+    if ($value === null || $value === '') {
+        return [$key => null];
     }
+
+    // FIXED: Instead of looking for generic "==", match true base64 payload characteristics securely
+    if (is_string($value) && preg_match('/^[a-zA-Z0-9\/+]+={0,2}$/', $value) && strlen($value) % 4 === 0) {
+        // Double check if it decrypts successfully. If it does, it's already encrypted!
+        try {
+            Aes256GcmEncrypter::fromConfiguration()->decrypt($value);
+            return [$key => $value];
+        } catch (\Throwable) {
+            // Processing failed; it's plain text that just looked like base64
+        }
+    }
+
+    $encrypted = Aes256GcmEncrypter::fromConfiguration()->encrypt((string) $value);
+
+    return [$key => $encrypted];
+}
 }

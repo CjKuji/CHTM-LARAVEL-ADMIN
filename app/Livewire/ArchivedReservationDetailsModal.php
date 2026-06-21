@@ -38,7 +38,7 @@ class ArchivedReservationDetailsModal extends Component
 
     /**
      * Helper to resolve a staff reference signature (ID or UUID) to a viewable user name string.
-     * * Changed type-hint from ?int to string|int|null to safely support UUID architectures.
+     * Bypasses Eloquent magic __call traps using strict reflection method validation.
      */
     private function getStaffName(string|int|null $staffId): ?string
     {
@@ -49,8 +49,20 @@ class ArchivedReservationDetailsModal extends Component
         $user = User::find($staffId);
         
         if ($user) {
-            // Checks if your User model uses a custom fullName method, otherwise falls back to standard name column layout
-            return method_exists($user, 'fullName') ? $user->fullName() : ($user->name ?? "Staff Reference #{$staffId}");
+            try {
+                // FIXED: We check the underlying physical class reflections to see if fullName() 
+                // is explicitly declared as a method on your App\Models\User class. 
+                // This completely bypasses Eloquent's __call magic forwarding mechanism.
+                $reflection = new \ReflectionClass($user);
+                if ($reflection->hasMethod('fullName')) {
+                    return $user->fullName();
+                }
+            } catch (\Exception $e) {
+                // Fallback gracefully if reflection fails for any unexpected environment reason
+            }
+
+            // Standard fallback chains for properties/database columns
+            return $user->full_name ?? $user->name ?? "Staff Reference #{$staffId}";
         }
 
         return "Staff Reference #{$staffId}";
