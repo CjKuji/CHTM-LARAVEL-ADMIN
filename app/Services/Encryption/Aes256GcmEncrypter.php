@@ -4,6 +4,8 @@ namespace App\Services\Encryption;
 
 use InvalidArgumentException;
 use RuntimeException;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 
 final class Aes256GcmEncrypter
 {
@@ -45,7 +47,6 @@ final class Aes256GcmEncrypter
 
     /**
      * Fallback key derivation framework utilizing primary system app key signatures.
-     * FIXED: Returns the decoded binary key directly without a SHA-256 mutation layer.
      */
     public static function deriveKeyFromAppKey(): string
     {
@@ -99,76 +100,74 @@ final class Aes256GcmEncrypter
     }
 
     /**
-     * Decrypt and verify structural integrity tags from an authenticated base64 payload.
+     * Decrypts data seamlessly, handling both custom binary formats 
+     * and Laravel native JSON serialized framework wrappers.
      */
-    public function decrypt(?string $payload): ?string
+    public function decrypt(string $payload): ?string
     {
-        if ($payload === null || $payload === '') {
-            return $payload;
+        if (empty($payload)) {
+            return null;
         }
 
-        $raw = base64_decode($payload, true);
+        // --- STRATEGY A: Handle Laravel Framework Native Envelopes (Row 2 / Google OAuth style) ---
+        if (str_starts_with($payload, 'ey')) {
+            try {
+                $decodedJson = base64_decode($payload, true);
+                if ($decodedJson !== false) {
+                    $envelope = json_decode($decodedJson, true);
+                    
+                    if (is_array($envelope) && isset($envelope['iv'], $envelope['value'])) {
+                        $iv = base64_decode((string)$envelope['iv'], true);
+                        $ciphertext = base64_decode((string)$envelope['value'], true);
+                        $tag = isset($envelope['tag']) ? base64_decode((string)$envelope['tag'], true) : false;
 
-        if ($raw !== false) {
-            $envelope = json_decode($raw, true);
+                        $appKey = self::deriveKeyFromAppKey();
 
-            if (is_array($envelope) && isset($envelope['iv'], $envelope['tag'], $envelope['value'])) {
-                $iv = base64_decode((string) $envelope['iv'], true);
-                $tag = base64_decode((string) $envelope['tag'], true);
-                $ciphertext = base64_decode((string) $envelope['value'], true);
+                        // Try decryption using framework AES-256-GCM format
+                        if ($tag !== false && $iv !== false && $ciphertext !== false) {
+                            $plaintext = openssl_decrypt($ciphertext, 'aes-256-gcm', $appKey, OPENSSL_RAW_DATA, $iv, $tag);
+                            if ($plaintext !== false) {
+                                return $plaintext;
+                            }
+                        }
 
-                if ($iv !== false && $tag !== false && $ciphertext !== false) {
-                    $plaintext = openssl_decrypt(
-                        $ciphertext,
-                        self::CIPHER,
-                        $this->key,
-                        OPENSSL_RAW_DATA,
-                        $iv,
-                        $tag
-                    );
-
-                    if ($plaintext !== false) {
-                        return $plaintext;
+                        // Try decryption using framework AES-256-CBC format fallback
+                        if ($iv !== false && $ciphertext !== false) {
+                            $plaintext = openssl_decrypt($ciphertext, 'aes-256-cbc', $appKey, OPENSSL_RAW_DATA, $iv);
+                            if ($plaintext !== false) {
+                                return $plaintext;
+                            }
+                        }
                     }
                 }
+            } catch (\Throwable $e) {
+                // Fall down cleanly to Strategy B on fallback exception triggers
             }
         }
 
+        // --- STRATEGY B: Clean execution of your original packed continuous binary logic (Row 1 style) ---
         try {
-            $decrypted = \Illuminate\Support\Facades\Crypt::decryptString($payload);
-
-            if (is_string($decrypted) && $decrypted !== '') {
-                return $decrypted;
+            $data = base64_decode($payload, true);
+            if ($data === false || strlen($data) < (self::IV_LENGTH + self::TAG_LENGTH)) {
+                return $payload;
             }
-        } catch (\Throwable) {
-            // Not a Laravel Crypt payload; continue through the AES-GCM handlers.
-        }
 
-        // SAFE FALLBACK: If it's plain text or doesn't meet the binary length rules, 
-        // treat it as unencrypted data and pass it through safely.
-        if ($raw === false || strlen($raw) < (self::IV_LENGTH + self::TAG_LENGTH)) {
+            $iv = substr($data, 0, self::IV_LENGTH);
+            $tag = substr($data, self::IV_LENGTH, self::TAG_LENGTH);
+            $ciphertext = substr($data, self::IV_LENGTH + self::TAG_LENGTH);
+
+            $plaintext = openssl_decrypt(
+                $ciphertext,
+                self::CIPHER,
+                $this->key,
+                OPENSSL_RAW_DATA,
+                $iv,
+                $tag
+            );
+
+            return $plaintext !== false ? $plaintext : $payload;
+        } catch (\Throwable $e) {
             return $payload;
         }
-
-        $iv = substr($raw, 0, self::IV_LENGTH);
-        $tag = substr($raw, self::IV_LENGTH, self::TAG_LENGTH);
-        $ciphertext = substr($raw, self::IV_LENGTH + self::TAG_LENGTH);
-
-        $plaintext = openssl_decrypt(
-            $ciphertext,
-            self::CIPHER,
-            $this->key,
-            OPENSSL_RAW_DATA,
-            $iv,
-            $tag
-        );
-
-        // INTEGRITY BOUNDARY SHIELD: If GCM tag authentication fails, return the raw source string.
-        if ($plaintext === false) {
-            \Illuminate\Support\Facades\Log::warning('⚠️ Aes256GcmEncrypter: Decryption failed or tag mismatch. Falling back to source payload string representation.');
-            return $payload; 
-        }
-
-        return $plaintext;
     }
 }

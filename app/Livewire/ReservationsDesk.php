@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\ArchivedBooking;
+use App\Models\User;
 use Livewire\Attributes\On;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -86,23 +87,75 @@ class ReservationsDesk extends Component
                 $userData = null;
 
                 if ($booking->user) {
-                    // Pull decrypted email natively using custom cast getters
+                    $user = $booking->user;
+                    $userId = (string) $user->getKey(); // Force dynamic UUID conversion string representation
+                    
+                    // 1. Force explicit UUID lookups directly via raw DB query to dodge Eloquent conversion traps
+                    $dbRow = DB::table('users')->where('id', $userId)->first();
+                    $rawEmail = $dbRow ? $dbRow->email : null;
+
+                    $plainEmail = null;
+                    $needsUpdate = false;
+
+                    if (is_string($rawEmail) && $rawEmail !== '') {
+                        $rawEmail = trim($rawEmail);
+
+                        if (str_contains($rawEmail, '@')) {
+                            // Plaintext found - Needs encryption
+                            $plainEmail = strtolower($rawEmail);
+                            $needsUpdate = true;
+                        } else {
+                            // Check if payload is already encrypted but needs visual extraction validation
+                            try {
+                                $decrypted = $this->decryptEncryptedString($rawEmail);
+                                if ($decrypted && str_contains($decrypted, '@')) {
+                                    $plainEmail = strtolower(trim($decrypted));
+                                }
+                            } catch (\Throwable $e) {
+                                $plainEmail = null;
+                            }
+                        }
+                    }
+
+                    // 2. Execute JIT encryption and hash writing 
+                    if ($needsUpdate && !empty($plainEmail)) {
+                        try {
+                            $encrypter = Aes256GcmEncrypter::fromConfiguration();
+                            $encryptedValue = $encrypter->encrypt($plainEmail);
+                            $hashedValue = User::hashEmail($plainEmail);
+
+                            DB::table('users')
+                                ->where('id', $userId)
+                                ->update([
+                                    'email'      => $encryptedValue,
+                                    'email_hash' => $hashedValue,
+                                    'updated_at' => now(),
+                                ]);
+
+                            // Sync memory records instantly for the execution scope context
+                            $user->setAttribute('email', $plainEmail);
+                            $user->setAttribute('email_hash', $hashedValue);
+                            $user->syncOriginalAttribute('email', $encryptedValue);
+                            $user->syncOriginalAttribute('email_hash', $hashedValue);
+                        } catch (\Throwable $e) {
+                            Log::error("JIT Encryption update sequence failed for UUID User #{$userId}: " . $e->getMessage());
+                        }
+                    }
+
+                    // Extract the presentation email state securely
                     try {
-                        $decryptedEmail = $booking->user->email;
+                        $decryptedEmail = $user->email;
                     } catch (\Throwable $e) {
-                        $decryptedEmail = $placeholder;
+                        $decryptedEmail = null;
                     }
 
                     if (empty($decryptedEmail) || !str_contains($decryptedEmail, '@')) {
-                        // Fallback attempt via the local decryption engine wrapper if model fails
-                        $rawEmail = $booking->user->getRawOriginal('email') ?? $booking->user->email ?? null;
-                        $decryptedEmail = $this->decryptEncryptedString(is_string($rawEmail) ? $rawEmail : null) ?? $placeholder;
+                        $decryptedEmail = $plainEmail ?? $placeholder;
                     }
 
-                    // FIXED: Invokes the dynamic decrypted model accessor format seamlessly
                     $userData = [
-                        'id'        => (string) $booking->user->getKey(),
-                        'full_name' => $booking->user->full_name ?? $booking->user->fullName() ?? 'Unknown Guest',
+                        'id'        => $userId,
+                        'full_name' => $user->full_name ?? $user->fullName() ?? 'Unknown Guest',
                         'email'     => $decryptedEmail,
                     ];
                 }
@@ -183,10 +236,9 @@ class ReservationsDesk extends Component
                     'room'               => $booking->room ? $booking->room->toArray() : null,
                     'is_conflicted'      => $isConflicted,
                 ];
-            }
-        )
-        ->values()
-        ->toArray();
+            })
+            ->values()
+            ->toArray();
     }
 
     /**
@@ -204,7 +256,6 @@ class ReservationsDesk extends Component
                 return [
                     'room_id'   => $booking->room_id,
                     'status'    => $booking->status, 
-                    // FIXED: Resolves decrypted presentation name instead of throwing error/encryption strings
                     'user_name' => $booking->user ? ($booking->user->full_name ?? $booking->user->fullName()) : 'Unknown Guest',
                     'start'     => $booking->start_at ? Carbon::parse($booking->start_at)->toDateString() : null, 
                     'end'       => $booking->end_at ? Carbon::parse($booking->end_at)->toDateString() : null,   
@@ -216,7 +267,7 @@ class ReservationsDesk extends Component
     /**
      * Broadcasts a targeted event down to the child modal component structure
      */
-    public function viewDetails(int $bookingId): void
+    public function viewDetails(string $bookingId): void
     {
         $this->dispatch('openBookingDetails', id: $bookingId)->to(ReservationDetailsModal::class);
     }
@@ -303,7 +354,7 @@ class ReservationsDesk extends Component
      * Approves a targeted booking reservation if slots are cleared
      */
     #[On('executeApprove')]
-    public function approveBooking(int $bookingId): void
+    public function approveBooking(string $bookingId): void
     {
         $booking = Booking::with(['user', 'room.roomType'])->find($bookingId);
         if (!$booking) return;
@@ -345,7 +396,7 @@ class ReservationsDesk extends Component
      * Rejects an incoming booking inquiry
      */
     #[On('executeReject')]
-    public function rejectBooking(int $bookingId): void
+    public function rejectBooking(string $bookingId): void
     {
         $booking = Booking::with(['user'])->find($bookingId);
         
@@ -375,7 +426,7 @@ class ReservationsDesk extends Component
      * Checks in a guest onto the current living layout assignment
      */
     #[On('executeCheckIn')]
-    public function checkInBooking(int $bookingId): void
+    public function checkInBooking(string $bookingId): void
     {
         $booking = Booking::find($bookingId);
         if ($booking) {
@@ -395,7 +446,7 @@ class ReservationsDesk extends Component
      * Transitions active room configurations safely over to historical archive logs
      */
     #[On('executeCheckOut')]
-    public function checkOutBooking(int $bookingId): void
+    public function checkOutBooking(string $bookingId): void
     {
         $booking = Booking::with(['user', 'room.roomType'])->find($bookingId);
 
@@ -454,9 +505,6 @@ class ReservationsDesk extends Component
 
     /**
      * ⚡ EVENT-DRIVEN LISTENERS:
-     * Listens exclusively to backend Echo WebSocket channels.
-     * This component will now run refreshComponentState ONLY when 
-     * a reservation channel event broadcasts an upgrade!
      */
     #[On('echo:reservations-desk,.BookingUpdated')]
     #[On('echo:reservations-desk,.BookingCreated')]

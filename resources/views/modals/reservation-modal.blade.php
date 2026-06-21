@@ -106,28 +106,15 @@
                             <div class="flex flex-col">
                                 <span class="text-gray-400 font-bold">Registered Guest Name:</span>
                                 <span class="text-gray-900 font-black text-sm mt-0.5">
-                                    {{ $booking->user->full_name ?? (is_callable([$booking->user, 'fullName']) ? $booking->user->fullName() : ($booking->user->name ?? 'System Guest')) }}
+                                    {{ $booking->user->full_name ?? 'System Guest' }}
                                 </span>
                             </div>
 
                             <div class="flex flex-col">
                                 <span class="text-gray-400 font-bold">Email Address:</span>
                                 <span class="text-gray-700 font-bold select-all font-mono text-[11px] break-all mt-0.5">
-                                    @php
-                                        $resolvedEmail = $booking->user->email ?? null;
-                                        if (filled($resolvedEmail) && !str_contains((string)$resolvedEmail, '@')) {
-                                            try {
-                                                $resolvedEmail = \App\Services\Encryption\Aes256GcmEncrypter::fromConfiguration()->decrypt((string)$resolvedEmail);
-                                            } catch (\Exception $e) {
-                                                try {
-                                                    $resolvedEmail = \Illuminate\Support\Facades\Crypt::decryptString((string)$resolvedEmail);
-                                                } catch (\Exception $ex) {
-                                                    $resolvedEmail = 'Encrypted (Verification Failed)';
-                                                }
-                                            }
-                                        }
-                                    @endphp
-                                    {{ $resolvedEmail ?? 'N/A' }}
+                                    {{-- Clean, modern layout handles your auto-casting transparently --}}
+                                    {{ $booking->user->email ?? 'N/A' }}
                                 </span>
                             </div>
 
