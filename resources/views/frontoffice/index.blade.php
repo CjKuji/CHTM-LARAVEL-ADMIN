@@ -86,8 +86,8 @@
 
                                     {{-- Guest Column --}}
                                     <td class="px-4 py-3.5 min-w-0 max-w-0 overflow-hidden">
-                                        <div class="font-medium text-gray-900 truncate" title="{{ $booking->user?->fullName() }}">
-                                            {{ $booking->user?->fullName() ?? 'Unknown Guest' }}
+                                        <div class="font-medium text-gray-900 truncate" title="{{ $booking->user?->full_name }}">
+                                            {{ $booking->user?->full_name ?? 'Unknown Guest' }}
                                         </div>
                                         {{-- Email temporarily hidden 
                                         <div class="text-xs text-gray-500 truncate mt-0.5">
